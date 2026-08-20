@@ -125,8 +125,8 @@ function addStyles() {
     .okey-mm-pill.joinable { color: #a8dfb3; border-color: rgba(91, 177, 108, .28); }
     #okey-back-to-tables {
       position: fixed;
-      top: 14px;
-      left: 14px;
+      top: 72px;
+      left: 16px;
       z-index: 156;
       display: none;
       border: 1px solid rgba(223,193,108,.24);
@@ -189,6 +189,28 @@ export function setupMatchmaking(socket, setMessage) {
   let pendingAction = false
   let reconnectForBrowser = false
 
+  function syncBackButtonPosition() {
+    const gameHud = document.getElementById('game-hud')
+    if (!gameHud) {
+      backButton.style.top = window.innerWidth <= 640 ? '65px' : '72px'
+      backButton.style.left = window.innerWidth <= 640 ? '10px' : '16px'
+      return
+    }
+
+    const hudRect = gameHud.getBoundingClientRect()
+    const gap = 10
+    backButton.style.top = `${Math.round(hudRect.bottom + gap)}px`
+    backButton.style.left = `${Math.round(hudRect.left)}px`
+  }
+
+  const gameHud = document.getElementById('game-hud')
+  const hudResizeObserver = gameHud && typeof ResizeObserver === 'function'
+    ? new ResizeObserver(syncBackButtonPosition)
+    : null
+  hudResizeObserver?.observe(gameHud)
+  window.addEventListener('resize', syncBackButtonPosition)
+  syncBackButtonPosition()
+
   function setPending(value, text = null) {
     pendingAction = Boolean(value)
     createButton.disabled = pendingAction || !socket.connected
@@ -211,6 +233,7 @@ export function setupMatchmaking(socket, setMessage) {
   }
 
   function updateBackButton() {
+    syncBackButtonPosition()
     const canLeave = Boolean(
       state.currentTableId &&
       (!state.publicGameState || state.publicGameState.phase === 'waiting') &&
