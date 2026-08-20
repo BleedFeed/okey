@@ -499,6 +499,7 @@ let pointerIsTouch = false
 let stockHoverAmount = 0
 let discardHoverAmount = 0
 let pulseTime = 0
+let mobileTakeDiscardListener = null
 
 function setPointerFromClient(clientX, clientY) {
   const rect = renderer.domElement.getBoundingClientRect()
@@ -816,6 +817,38 @@ function reconcileDiscardHistory(gameState, previousGameState) {
   lastRound = gameState?.round ?? lastRound
 }
 
+function publishMobileDiscardState(gameState, canTakeLatest = false) {
+  const localSeat = SEAT_ORDER.includes(state.localSeat)
+    ? state.localSeat
+    : null
+  const leftSeat = localSeat ? previousSeat(localSeat) : null
+  const leftTile = leftSeat ? (topDiscardTiles[leftSeat] || null) : null
+  const ownTile = localSeat ? (topDiscardTiles[localSeat] || null) : null
+  const leftIsActive = Boolean(
+    leftSeat &&
+    leftTile?.id &&
+    latestDiscardSeat === leftSeat &&
+    activeDiscardTopId === leftTile.id
+  )
+
+  window.dispatchEvent(new CustomEvent('okey:mobile-discard-state', {
+    detail: {
+      leftSeat,
+      leftTile,
+      ownTile,
+      ownCount: localSeat
+        ? Math.max(0, Number(state.discardCountsBySeat?.[localSeat]) || 0)
+        : 0,
+      canTake: Boolean(canTakeLatest && leftIsActive),
+      blockedPlayable: Boolean(
+        leftIsActive &&
+        gameState?.currentSeat === localSeat &&
+        gameState?.discardTopPlayable
+      ),
+    },
+  }))
+}
+
 function renderDiscardAreas(gameState) {
   latestDiscardVisual = null
   latestDiscardSeat = null
@@ -939,6 +972,7 @@ function renderDiscardAreas(gameState) {
 
   takeDiscardHitbox.visible = canTakeLatest
   takeDiscardGlow.visible = latestExists
+  publishMobileDiscardState(gameState, canTakeLatest)
 }
 
 function getActionAtPointer(event = null) {
@@ -1411,6 +1445,7 @@ export function resetTableVisualState() {
   destroyInspectionTile()
   discardInspectionRoot.visible = false
   inspectionShownScale = 0
+  publishMobileDiscardState({}, false)
 }
 
 // =====================================================
@@ -1461,6 +1496,51 @@ export function setupTableInteractions(
   // kaydımızdan çıkarabilmek için server'ın public discard-taken olayını dinle.
   socket.off('discard-taken', handleDiscardTakenVisualEvent)
   socket.on('discard-taken', handleDiscardTakenVisualEvent)
+
+  // Mobilde sol-alt panel fiziksel 3D kuleye küçük bir raycast atmayı
+  // gerektirmeden aynı güvenli take-discard akışını çağırır. Server doğrulaması
+  // değişmez; panel yalnız mevcut hedefi erişilebilir hale getirir.
+  if (mobileTakeDiscardListener) {
+    window.removeEventListener('okey:mobile-take-discard', mobileTakeDiscardListener)
+  }
+  mobileTakeDiscardListener = () => {
+    if (state.isDraggingTile || state.pendingTablePickup || state.isStickyPickup) return
+
+    const leftSeat = SEAT_ORDER.includes(state.localSeat)
+      ? previousSeat(state.localSeat)
+      : null
+    const leftTile = leftSeat ? topDiscardTiles[leftSeat] : null
+    const receiverSeat = latestDiscardSeat
+      ? nextSeat(latestDiscardSeat, 1)
+      : null
+    const canTake = Boolean(
+      leftSeat &&
+      leftTile?.id &&
+      latestDiscardSeat === leftSeat &&
+      activeDiscardTopId === leftTile.id &&
+      receiverSeat === state.localSeat &&
+      state.publicGameState?.currentSeat === state.localSeat &&
+      !state.publicGameState?.discardTopPlayable &&
+      takeDiscardHitbox.visible
+    )
+
+    if (!canTake) {
+      setMessage(
+        state.publicGameState?.discardTopPlayable
+          ? 'BU TAŞ İŞLEK, ALAMAZSIN'
+          : 'Soldaki atık şu anda alınamaz.'
+      )
+      return
+    }
+
+    beginPickupRequest({
+      action: 'take-discard',
+      seat: leftSeat,
+      tileData: leftTile,
+      sourceIndex: Math.max(0, (state.discardCountsBySeat?.[leftSeat] || 1) - 1),
+    }, socket, setMessage)
+  }
+  window.addEventListener('okey:mobile-take-discard', mobileTakeDiscardListener)
 
   // Yandan alınan taş daha ıstakaya konmadan mouse'a yapışık haldeyken de
   // geldiği sol stack'e tek tıkla doğrudan geri bırakılabilir.

@@ -52,10 +52,10 @@ export const seatCameraSettings = {
   },
 }
 
-// Masaüstü kamera değerleri değişmeden kalır. Mobil oyun landscape-first
-// tasarlandığı için telefon yatayken kamera masaüstüne yakın ama biraz daha
-// yakın bir profilde çalışır. FOV yalnız rack'in iki ucunu güvenli tutacak
-// kadar genişletilir; böylece önceki mobil sürümdeki "çok uzakta" hissi yoktur.
+// Masaüstü kamera değerleri değişmeden kalır. Mobil landscape görünümü ise
+// masa merkezini seyretmek yerine ıstakayı ana oyun alanı yapar. Kamera fiziksel
+// olarak belirgin biçimde yaklaştırılır; FOV yalnız ıstakanın iki ucunun dar
+// telefonlarda kesilmemesi için aspect oranına göre açılır.
 function updateResponsiveSeatCameraSettings() {
   let distance = CAMERA_DISTANCE
   let height = CAMERA_HEIGHT
@@ -65,28 +65,28 @@ function updateResponsiveSeatCameraSettings() {
     const aspect = window.innerWidth / Math.max(window.innerHeight, 1)
 
     if (aspect >= 2.05) {
-      distance = 6.18
-      height = 4.08
-      fov = 56
+      distance = 4.92
+      height = 2.38
+      fov = 60
     }
-    else if (aspect >= 1.65) {
-      distance = 6.25
-      height = 4.10
-      fov = 57
+    else if (aspect >= 1.75) {
+      distance = 4.98
+      height = 2.40
+      fov = 64
     }
-    else if (aspect >= 1.35) {
-      distance = 6.38
-      height = 4.12
-      fov = 58
+    else if (aspect >= 1.52) {
+      distance = 5.02
+      height = 2.42
+      fov = 68
     }
     else if (aspect >= 1.0) {
-      distance = 6.50
-      height = CAMERA_HEIGHT
-      fov = 59
+      distance = 5.15
+      height = 2.48
+      fov = 70
     }
     else {
-      // Portrait'te oyun orientation katmanı ile kilitlidir; yine de resize
-      // anında sahnenin aşırı yakınlaşmaması için güvenli nötr bir profil tut.
+      // Portrait oyun orientation overlay ile kilitlidir. Resize sırasında
+      // anlamsız yakınlaşma olmasın diye masaüstü profilini tut.
       distance = CAMERA_DISTANCE
       height = CAMERA_HEIGHT
       fov = DESKTOP_CAMERA_FOV
