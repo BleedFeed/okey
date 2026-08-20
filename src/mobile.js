@@ -17,6 +17,7 @@ let mobileRoot = null
 let cameraControls = null
 let openingCameraButton = null
 let discardHint = null
+let orientationHint = null
 let lastOrientationKey = ''
 let stylesInstalled = false
 let cachedTouchLayout = null
@@ -411,27 +412,344 @@ function installStyles() {
       touch-action: manipulation;
     }
 
-    @media (orientation: portrait) {
-      .okey-touch-ui #okey-mobile-gameplay-controls {
-        top: 55%;
-      }
-
-      .okey-touch-ui #social-panel {
-        max-height: min(40dvh, calc(var(--okey-visible-height, 100dvh) - 82px)) !important;
-      }
+    /* Dikey telefonlarda oyunu oynatmak yerine net bir yönlendirme göster.
+       Overlay tüm pointer input'unu yakalar; böylece oyuncu telefonu çevirirken
+       alttaki 3D masada yanlışlıkla drag/discard oluşmaz. */
+    #okey-mobile-orientation-hint {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: none;
+      place-items: center;
+      box-sizing: border-box;
+      padding:
+        calc(24px + var(--okey-safe-top, 0px))
+        calc(22px + var(--okey-safe-right, 0px))
+        calc(24px + var(--okey-safe-bottom, 0px))
+        calc(22px + var(--okey-safe-left, 0px));
+      background:
+        radial-gradient(circle at 50% 38%, rgba(54, 84, 67, .28), transparent 38%),
+        linear-gradient(180deg, #111816 0%, #080d0c 100%);
+      color: #f7f2df;
+      text-align: center;
+      pointer-events: auto;
+      touch-action: none;
     }
 
+    .okey-touch-ui.okey-mobile-portrait #okey-mobile-orientation-hint {
+      display: grid;
+    }
+
+    #okey-mobile-orientation-hint .okey-orientation-card {
+      width: min(330px, calc(100vw - 44px));
+      padding: 26px 24px 24px;
+      box-sizing: border-box;
+      border: 1px solid rgba(224, 180, 90, .24);
+      border-radius: 20px;
+      background: rgba(9, 15, 13, .96);
+      box-shadow: 0 18px 54px rgba(0, 0, 0, .46), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    #okey-mobile-orientation-hint .okey-orientation-phone {
+      position: relative;
+      width: 72px;
+      height: 42px;
+      margin: 0 auto 20px;
+      box-sizing: border-box;
+      border: 3px solid rgba(246, 225, 166, .92);
+      border-radius: 10px;
+      box-shadow: 0 0 24px rgba(224, 180, 90, .10);
+    }
+
+    #okey-mobile-orientation-hint .okey-orientation-phone::after {
+      content: '';
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      width: 4px;
+      height: 4px;
+      transform: translateY(-50%);
+      border-radius: 50%;
+      background: rgba(246, 225, 166, .9);
+    }
+
+    #okey-mobile-orientation-hint strong {
+      display: block;
+      margin: 0;
+      color: #f6e2aa;
+      font: 900 20px/1.15 "Segoe UI", Tahoma, sans-serif;
+      letter-spacing: .025em;
+    }
+
+    #okey-mobile-orientation-hint p {
+      margin: 10px 0 0;
+      color: rgba(247,249,248,.66);
+      font: 650 12px/1.45 "Segoe UI", Tahoma, sans-serif;
+    }
+
+    /* Mobil oyun yalnız yatay telefona göre yerleşir. Geniş ekranın merkezi
+       tamamen Three.js oyun alanına bırakılır; kontroller köşelere dağılır. */
     @media (orientation: landscape) {
+      .okey-touch-ui {
+        --okey-mobile-edge: 7px;
+        --okey-mobile-control-h: 34px;
+      }
+
       .okey-touch-ui #game-hud {
-        width: min(238px, calc(100vw - 14px)) !important;
+        top: calc(var(--okey-mobile-edge) + var(--okey-safe-top, 0px)) !important;
+        left: calc(var(--okey-mobile-edge) + var(--okey-safe-left, 0px)) !important;
+        width: min(222px, 27vw) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 16px) !important;
+        border-radius: 9px !important;
       }
 
       .okey-touch-ui.okey-mobile-playing #game-hud.is-collapsed {
-        width: 176px !important;
+        width: min(166px, 22vw) !important;
       }
 
+      .okey-touch-ui #hud-panel-toggle {
+        min-height: var(--okey-mobile-control-h) !important;
+        height: var(--okey-mobile-control-h) !important;
+        padding: 4px 7px 4px 9px !important;
+        border-radius: 8px !important;
+      }
+
+      .okey-touch-ui .hud-panel-title {
+        font-size: 9px !important;
+      }
+
+      .okey-touch-ui #hud-panel-summary {
+        max-width: 76px !important;
+        font-size: 7.5px !important;
+      }
+
+      .okey-touch-ui .hud-panel-chevron {
+        width: 22px !important;
+        height: 22px !important;
+        flex-basis: 22px !important;
+      }
+
+      .okey-touch-ui #hud-panel-content-inner {
+        max-height: min(67dvh, calc(var(--okey-visible-height, 100dvh) - 48px)) !important;
+        padding: 5px 6px 7px !important;
+      }
+
+      .okey-touch-ui #game-hud button:not(#hud-panel-toggle),
+      .okey-touch-ui #game-hud select {
+        min-height: 32px !important;
+        font-size: 9px !important;
+      }
+
+      /* Masalara dön butonu HUD'un altında kalmaya devam eder; JS HUD'un
+         gerçek yüksekliğine göre top değerini hesaplar. Yalnız boyutu küçülür. */
+      .okey-touch-ui #okey-back-to-tables {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 0 10px !important;
+        border-radius: 8px !important;
+        font-size: 9px !important;
+      }
+
+      /* Açılan taşlar düğmesi merkez üstte; sol/sağ HUD'larla çakışmaz. */
       .okey-touch-ui #opened-board-inspector-toggle {
-        top: calc(7px + var(--okey-safe-top, 0px)) !important;
+        top: calc(var(--okey-mobile-edge) + var(--okey-safe-top, 0px)) !important;
+        left: 50% !important;
+        min-height: var(--okey-mobile-control-h) !important;
+        height: var(--okey-mobile-control-h) !important;
+        padding: 0 11px !important;
+        border-radius: 8px !important;
+        font-size: 8.5px !important;
+        white-space: nowrap !important;
+      }
+
+      .okey-touch-ui #opened-board-inspector-panel {
+        top: calc(48px + var(--okey-safe-top, 0px)) !important;
+        width: min(620px, 72vw) !important;
+        max-width: min(620px, 72vw) !important;
+        height: min(47dvh, 235px) !important;
+        min-height: 150px !important;
+        padding: 5px !important;
+        border-radius: 10px !important;
+      }
+
+      .okey-touch-ui #opened-board-mobile-tabs {
+        left: 6px !important;
+        right: 44px !important;
+        top: 5px !important;
+        gap: 4px !important;
+      }
+
+      .okey-touch-ui #opened-board-mobile-tabs button {
+        min-height: 30px !important;
+        height: 30px !important;
+        font-size: 9px !important;
+      }
+
+      .okey-touch-ui #opened-board-mobile-zoom {
+        right: 6px !important;
+        bottom: 6px !important;
+      }
+
+      .okey-touch-ui #opened-board-mobile-zoom button {
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+      }
+
+      /* Puan defteri sağ üstte kompakt kalır. Açılınca ekranın sağ yarısını
+         kullanır ve masa merkezini tamamen kaplamaz. */
+      .okey-touch-ui #score-notebook {
+        top: calc(var(--okey-mobile-edge) + var(--okey-safe-top, 0px)) !important;
+        right: calc(var(--okey-mobile-edge) + var(--okey-safe-right, 0px)) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 14px) !important;
+      }
+
+      .okey-touch-ui #score-notebook:not(.is-open) {
+        width: 116px !important;
+        max-height: var(--okey-mobile-control-h) !important;
+      }
+
+      .okey-touch-ui #score-notebook-toggle {
+        height: var(--okey-mobile-control-h) !important;
+        min-height: var(--okey-mobile-control-h) !important;
+        padding: 0 22px 0 8px !important;
+        font-size: 9px !important;
+      }
+
+      .okey-touch-ui #score-notebook.is-open {
+        width: min(390px, 48vw) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 14px) !important;
+      }
+
+      .okey-touch-ui #score-notebook-body {
+        max-height: calc(var(--okey-visible-height, 100dvh) - 48px) !important;
+      }
+
+      /* Chat sağ üst kontrollerin altına açılır; sağ orta discard bölgesi ve
+         alt orta rack alanı boş kalır. */
+      .okey-touch-ui #chat-dock-button {
+        top: calc(48px + var(--okey-safe-top, 0px)) !important;
+        right: calc(var(--okey-mobile-edge) + var(--okey-safe-right, 0px)) !important;
+        bottom: auto !important;
+        width: 36px !important;
+        min-width: 36px !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        border-radius: 9px !important;
+      }
+
+      .okey-touch-ui #social-panel {
+        top: calc(48px + var(--okey-safe-top, 0px)) !important;
+        right: calc(var(--okey-mobile-edge) + var(--okey-safe-right, 0px)) !important;
+        bottom: auto !important;
+        width: min(310px, 42vw) !important;
+        max-height: min(72dvh, calc(var(--okey-visible-height, 100dvh) - 56px)) !important;
+        padding: 6px !important;
+        border-radius: 9px !important;
+      }
+
+      .okey-touch-ui #social-panel #chat-log {
+        max-height: min(29dvh, 112px) !important;
+      }
+
+      .okey-touch-ui #social-panel button,
+      .okey-touch-ui #chat-input,
+      .okey-touch-ui #chat-send-button {
+        min-height: 32px !important;
+      }
+
+      .okey-touch-ui.okey-mobile-keyboard-open #social-panel {
+        top: calc(5px + var(--okey-safe-top, 0px)) !important;
+        right: calc(5px + var(--okey-safe-right, 0px)) !important;
+        width: min(420px, 58vw) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 10px) !important;
+      }
+
+      /* Kamera kontrolleri alt-sol köşede yatay ve küçük. Rack ortasına veya
+         taş atma bölgesine girmediği için oyun alanını daraltmaz. */
+      #okey-mobile-gameplay-controls {
+        left: calc(var(--okey-mobile-edge) + var(--okey-safe-left, 0px));
+        top: auto;
+        bottom: calc(var(--okey-mobile-edge) + var(--okey-safe-bottom, 0px));
+        width: auto;
+        grid-template-columns: repeat(3, 46px);
+        gap: 3px;
+        padding: 3px;
+        transform: none;
+        border-radius: 9px;
+      }
+
+      #okey-mobile-gameplay-controls button {
+        width: 46px;
+        min-width: 46px;
+        height: 34px;
+        min-height: 34px;
+        border-radius: 7px;
+        font-size: 7.5px;
+      }
+
+      #okey-mobile-discard-hint {
+        right: calc(7px + var(--okey-safe-right, 0px));
+        top: 53%;
+        width: 58px;
+        height: 78px;
+        border-radius: 11px;
+        font-size: 11px;
+      }
+
+      .okey-touch-ui #round-end-banner,
+      .okey-touch-ui #seat-swap-offer-panel {
+        max-width: min(620px, 78vw) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 16px) !important;
+        overflow-y: auto !important;
+      }
+
+      /* Match finder da landscape'e göre sıkıştırılır: başlık ve toolbar üstte,
+         masalar kalan yüksekliği scroll ederek kullanır. */
+      .okey-touch-ui #okey-matchmaker {
+        padding:
+          calc(6px + var(--okey-safe-top, 0px))
+          calc(8px + var(--okey-safe-right, 0px))
+          calc(6px + var(--okey-safe-bottom, 0px))
+          calc(8px + var(--okey-safe-left, 0px)) !important;
+      }
+
+      .okey-touch-ui .okey-mm-shell {
+        width: min(820px, calc(100vw - 16px)) !important;
+        max-width: 820px !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 12px) !important;
+        border-radius: 12px !important;
+      }
+
+      .okey-touch-ui .okey-mm-head {
+        padding: 12px 16px 9px !important;
+      }
+
+      .okey-touch-ui .okey-mm-title {
+        font-size: clamp(21px, 4.2vh, 30px) !important;
+      }
+
+      .okey-touch-ui .okey-mm-subtitle {
+        font-size: 11px !important;
+      }
+
+      .okey-touch-ui .okey-mm-toolbar {
+        padding: 8px 12px !important;
+        gap: 7px !important;
+      }
+
+      .okey-touch-ui .okey-mm-btn {
+        min-height: 34px !important;
+        padding-block: 7px !important;
+      }
+
+      .okey-touch-ui .okey-mm-list {
+        padding: 8px 12px 12px !important;
+      }
+
+      .okey-touch-ui .okey-mm-card {
+        padding: 9px 10px !important;
+        border-radius: 10px !important;
       }
     }
   `
@@ -479,7 +797,19 @@ function ensureMobileDom() {
   discardHint.textContent = 'AT'
   discardHint.setAttribute('aria-hidden', 'true')
 
-  document.body.append(cameraControls, discardHint)
+  orientationHint = document.createElement('div')
+  orientationHint.id = 'okey-mobile-orientation-hint'
+  orientationHint.setAttribute('role', 'status')
+  orientationHint.setAttribute('aria-live', 'polite')
+  orientationHint.innerHTML = `
+    <div class="okey-orientation-card">
+      <div class="okey-orientation-phone" aria-hidden="true"></div>
+      <strong>Telefonu Yatay Çevir</strong>
+      <p>Okey masası telefonlarda yatay kullanım için düzenlendi.</p>
+    </div>
+  `
+
+  document.body.append(cameraControls, discardHint, orientationHint)
   mobileRoot = cameraControls
 }
 
@@ -506,10 +836,22 @@ function updateViewportCssVars() {
 
 function updateLayoutClass() {
   const enabled = computeTouchLayout()
+  const landscape = window.innerWidth >= window.innerHeight
+
   if (cachedTouchLayout !== enabled) {
     cachedTouchLayout = enabled
     document.documentElement.classList.toggle('okey-touch-ui', enabled)
   }
+
+  document.documentElement.classList.toggle(
+    'okey-mobile-landscape',
+    enabled && landscape
+  )
+  document.documentElement.classList.toggle(
+    'okey-mobile-portrait',
+    enabled && !landscape
+  )
+
   updateViewportCssVars()
   return enabled
 }
@@ -565,7 +907,12 @@ export function updateMobileUi() {
 
   cameraControls.classList.toggle(
     'visible',
-    enabled && inTable && isPlaying && !state.isDraggingTile && !state.isStickyPickup
+    enabled &&
+    window.innerWidth >= window.innerHeight &&
+    inTable &&
+    isPlaying &&
+    !state.isDraggingTile &&
+    !state.isStickyPickup
   )
 
   // Telefonda oyun başladığında masa alanını otomatik boşalt. Kullanıcı HUD veya
@@ -598,6 +945,7 @@ export function updateMobileUi() {
 
   const canShowDiscard = Boolean(
     enabled &&
+    window.innerWidth >= window.innerHeight &&
     isPlaying &&
     !state.openBoardDragCaptured &&
     (

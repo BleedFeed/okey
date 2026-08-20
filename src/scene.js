@@ -52,9 +52,10 @@ export const seatCameraSettings = {
   },
 }
 
-// Masaüstü kamera değerleri değişmeden kalır. Yalnız coarse-pointer telefon/
-// tablet görünümünde portrait ekranın dar yatay FOV'u için kamera biraz geriye
-// alınır; böylece ıstakanın iki ucu ve sağ discard alanı kadrajdan çıkmaz.
+// Masaüstü kamera değerleri değişmeden kalır. Mobil oyun landscape-first
+// tasarlandığı için telefon yatayken kamera masaüstüne yakın ama biraz daha
+// yakın bir profilde çalışır. FOV yalnız rack'in iki ucunu güvenli tutacak
+// kadar genişletilir; böylece önceki mobil sürümdeki "çok uzakta" hissi yoktur.
 function updateResponsiveSeatCameraSettings() {
   let distance = CAMERA_DISTANCE
   let height = CAMERA_HEIGHT
@@ -63,31 +64,30 @@ function updateResponsiveSeatCameraSettings() {
   if (isTouchLayout()) {
     const aspect = window.innerWidth / Math.max(window.innerHeight, 1)
 
-    // Portrait telefonda yalnız kamerayı geriye almak yatay FOV'u yeterince
-    // büyütmüyordu; rack'in iki ucu hâlâ kırpılabiliyordu. Dar ekranlarda FOV
-    // da kontrollü şekilde genişler. Landscape masaüstüne yakın kalır.
-    if (aspect < 0.48) {
-      distance = 8.15
-      height = 4.44
-      fov = 78
+    if (aspect >= 2.05) {
+      distance = 6.18
+      height = 4.08
+      fov = 56
     }
-    else if (aspect < 0.62) {
-      distance = 8.05
-      height = 4.42
-      fov = 75
+    else if (aspect >= 1.65) {
+      distance = 6.25
+      height = 4.10
+      fov = 57
     }
-    else if (aspect < 0.82) {
-      distance = 7.48
-      height = 4.34
-      fov = 67
+    else if (aspect >= 1.35) {
+      distance = 6.38
+      height = 4.12
+      fov = 58
     }
-    else if (aspect < 1.05) {
-      distance = 7.02
-      height = 4.23
-      fov = 60
+    else if (aspect >= 1.0) {
+      distance = 6.50
+      height = CAMERA_HEIGHT
+      fov = 59
     }
     else {
-      distance = 6.72
+      // Portrait'te oyun orientation katmanı ile kilitlidir; yine de resize
+      // anında sahnenin aşırı yakınlaşmaması için güvenli nötr bir profil tut.
+      distance = CAMERA_DISTANCE
       height = CAMERA_HEIGHT
       fov = DESKTOP_CAMERA_FOV
     }
