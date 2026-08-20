@@ -7,8 +7,6 @@
 
 const SOUND_PATHS = Object.freeze({
   'round-deal': '/sounds/round_deal.mp3',
-  'rack-pickup': '/sounds/rack_pickup.mp3',
-  'rack-place': '/sounds/rack_place.mp3',
   'discard-first': '/sounds/discard_first.mp3',
   'discard-stack': '/sounds/discard_stack.mp3',
   'meld-place': '/sounds/meld_place.mp3',
@@ -23,8 +21,6 @@ const SOUND_PATHS = Object.freeze({
 
 const SOUND_VOLUMES = Object.freeze({
   'round-deal': 0.82,
-  'rack-pickup': 0.56,
-  'rack-place': 0.60,
   'discard-first': 0.78,
   'discard-stack': 0.78,
   'meld-place': 0.76,

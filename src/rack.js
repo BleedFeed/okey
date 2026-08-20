@@ -26,7 +26,6 @@ import {
   createHiddenTile,
   clearGroup,
 } from './tiles.js'
-import { playGameSound } from './audio.js'
 
 
 // =====================================================
@@ -3620,7 +3619,6 @@ export function setupRackDragging(
         moveStickyPickup(localPoint)
 
         if (commitStickyPickup(localPoint)) {
-          playGameSound('rack-place')
           setMessage(
             state.returnableDiscardTileId
               ? 'Taş ıstakaya yerleştirildi. Sarı çerçeveli taşı geldiği atık kulesine sürükleyip bırakarak geri koyabilirsin.'
@@ -3689,13 +3687,11 @@ export function setupRackDragging(
         const meld = findMeldContainingTile(tileId)
 
         if (meld) {
-          if (beginActiveDrag(
+          beginActiveDrag(
             'meld',
             meld.tileIds,
             tileId
-          )) {
-            playGameSound('rack-pickup')
-          }
+          )
 
           // Önizleme ancak mouse hareket edince gösterilecek.
           return
@@ -3703,13 +3699,11 @@ export function setupRackDragging(
       }
 
       // Üst yarı veya alt yarıda geçerli per/çift yok: yalnızca o taş tutulur.
-      if (beginActiveDrag(
+      beginActiveDrag(
         'single',
         [tileId],
         tileId
-      )) {
-        playGameSound('rack-pickup')
-      }
+      )
     }
   )
 
@@ -4001,10 +3995,7 @@ export function setupRackDragging(
     // Mouse bırakıldığı anda rack drop tek seferde tamamlanır.
     // Geçersiz / sığmayan yerde state değiştirilmez ve render eski güvenli
     // konuma geri döndürür.
-    const rackMoved = commitActiveDrag()
-    if (rackMoved) {
-      playGameSound('rack-place')
-    }
+    commitActiveDrag()
 
     resetDragState()
     clearPress()
