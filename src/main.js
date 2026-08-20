@@ -1388,6 +1388,14 @@ document.addEventListener('pointermove', event => {
     updateOverviewRequest(event.clientY, true)
   }
 
+  // Parmak hareketi uzaktaki avatar gözlerini sürmek için kullanılmıyor.
+  // Özellikle taş drag sırasında 20 Hz player-look yayını + DOM/network işi
+  // mobilde gereksiz gecikme yaratıyordu. Oyun etkileşimleri canvas handler'ında
+  // zaten işlendiği için touch burada güvenle sonlanabilir.
+  if (isTouchPointerEvent(event)) {
+    return
+  }
+
   // Kamera artık mouse ile kontrol edilmiyor. Pointer yalnız taş etkileşimleri
   // ve diğer oyuncuların göz yönü için kullanılmaya devam eder.
   if (

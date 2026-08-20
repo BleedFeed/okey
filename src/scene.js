@@ -14,8 +14,10 @@ import { getRendererPixelRatio, isTouchLayout } from './mobile.js'
 export const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x171513)
 
+const DESKTOP_CAMERA_FOV = 55
+
 export const camera = new THREE.PerspectiveCamera(
-  55,
+  DESKTOP_CAMERA_FOV,
   window.innerWidth / window.innerHeight,
   0.1,
   100
@@ -56,29 +58,42 @@ export const seatCameraSettings = {
 function updateResponsiveSeatCameraSettings() {
   let distance = CAMERA_DISTANCE
   let height = CAMERA_HEIGHT
+  let fov = DESKTOP_CAMERA_FOV
 
   if (isTouchLayout()) {
     const aspect = window.innerWidth / Math.max(window.innerHeight, 1)
 
-    if (aspect < 0.62) {
-      distance = 8.35
-      height = 4.55
+    // Portrait telefonda yalnız kamerayı geriye almak yatay FOV'u yeterince
+    // büyütmüyordu; rack'in iki ucu hâlâ kırpılabiliyordu. Dar ekranlarda FOV
+    // da kontrollü şekilde genişler. Landscape masaüstüne yakın kalır.
+    if (aspect < 0.48) {
+      distance = 8.15
+      height = 4.44
+      fov = 78
+    }
+    else if (aspect < 0.62) {
+      distance = 8.05
+      height = 4.42
+      fov = 75
     }
     else if (aspect < 0.82) {
-      distance = 7.65
-      height = 4.36
+      distance = 7.48
+      height = 4.34
+      fov = 67
     }
     else if (aspect < 1.05) {
-      distance = 7.05
-      height = 4.24
+      distance = 7.02
+      height = 4.23
+      fov = 60
     }
     else {
-      // Landscape telefonda masaüstüne çok yakın kadraj korunur.
       distance = 6.72
       height = CAMERA_HEIGHT
+      fov = DESKTOP_CAMERA_FOV
     }
   }
 
+  camera.fov = fov
   seatCameraSettings['player-bottom'].position.set(0, height, distance)
   seatCameraSettings['player-top'].position.set(0, height, -distance)
   seatCameraSettings['player-left'].position.set(-distance, height, 0)
@@ -86,6 +101,7 @@ function updateResponsiveSeatCameraSettings() {
 }
 
 updateResponsiveSeatCameraSettings()
+camera.updateProjectionMatrix()
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)

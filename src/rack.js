@@ -3815,11 +3815,22 @@ export function setupRackDragging(
       // çözücüsü devreden çıkar; gerçek taşları saklayıp masadaki snap
       // önizlemesini gösteririz. Böylece per, kamera hareket ederken rack'e
       // geri çekilmez.
+      // Touch'ta rack'in alt bölgesinde normal yeniden dizme yaparken açma
+      // board'unun pahalı raycast/snap hesabını her pointermove'da çalıştırma.
+      // Parmak ekranın üst yarısına yöneldiğinde veya overview başlamışsa aynı
+      // mevcut board akışı devreye girer. Desktop davranışı birebir korunur.
+      const touchBoardIntent =
+        !isTouchPointerEvent(event) ||
+        event.clientY <= window.innerHeight * 0.46 ||
+        state.overviewProgress > 0.03
+
       const canTargetOpenBoard =
+        touchBoardIntent &&
         activeDrag.mode === 'meld' &&
         activeDrag.items.length >= 2
 
       const canTargetLayoffBoard =
+        touchBoardIntent &&
         activeDrag.mode === 'single' &&
         activeDrag.items.length === 1 &&
         Boolean(
