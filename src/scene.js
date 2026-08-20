@@ -9,6 +9,7 @@ import {
   RACK_MODEL_Y_OFFSET,
   RACK_MODEL_Z_OFFSET,
 } from './config.js'
+import { getRendererPixelRatio, isTouchLayout } from './mobile.js'
 
 export const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x171513)
@@ -49,9 +50,46 @@ export const seatCameraSettings = {
   },
 }
 
+// Masaüstü kamera değerleri değişmeden kalır. Yalnız coarse-pointer telefon/
+// tablet görünümünde portrait ekranın dar yatay FOV'u için kamera biraz geriye
+// alınır; böylece ıstakanın iki ucu ve sağ discard alanı kadrajdan çıkmaz.
+function updateResponsiveSeatCameraSettings() {
+  let distance = CAMERA_DISTANCE
+  let height = CAMERA_HEIGHT
+
+  if (isTouchLayout()) {
+    const aspect = window.innerWidth / Math.max(window.innerHeight, 1)
+
+    if (aspect < 0.62) {
+      distance = 8.35
+      height = 4.55
+    }
+    else if (aspect < 0.82) {
+      distance = 7.65
+      height = 4.36
+    }
+    else if (aspect < 1.05) {
+      distance = 7.05
+      height = 4.24
+    }
+    else {
+      // Landscape telefonda masaüstüne çok yakın kadraj korunur.
+      distance = 6.72
+      height = CAMERA_HEIGHT
+    }
+  }
+
+  seatCameraSettings['player-bottom'].position.set(0, height, distance)
+  seatCameraSettings['player-top'].position.set(0, height, -distance)
+  seatCameraSettings['player-left'].position.set(-distance, height, 0)
+  seatCameraSettings['player-right'].position.set(distance, height, 0)
+}
+
+updateResponsiveSeatCameraSettings()
+
 export const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+renderer.setPixelRatio(getRendererPixelRatio())
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 // Cay seviyesi, liquid mesh'i world-horizontal clipping plane ile keser.
@@ -1320,7 +1358,11 @@ export const rackDragPlane = new THREE.Mesh(
 rackDragPlane.position.set(0, 0.48, 0.17)
 
 export function resizeScene() {
-  camera.aspect = window.innerWidth / window.innerHeight
+  updateResponsiveSeatCameraSettings()
+  camera.aspect = window.innerWidth / Math.max(window.innerHeight, 1)
   camera.updateProjectionMatrix()
+  if (isTouchLayout()) {
+    renderer.setPixelRatio(getRendererPixelRatio())
+  }
   renderer.setSize(window.innerWidth, window.innerHeight)
 }

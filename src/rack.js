@@ -26,6 +26,13 @@ import {
   createHiddenTile,
   clearGroup,
 } from './tiles.js'
+import {
+  getJokerClickMoveTolerance,
+  getJokerDoubleClickDistance,
+  getPointerMoveThreshold,
+  isMobileDiscardDropPoint,
+  isTouchPointerEvent,
+} from './mobile.js'
 
 
 // =====================================================
@@ -1412,7 +1419,7 @@ function updateStickyPickupPreview(localPoint) {
   }
 }
 
-function moveStickyPickup(localPoint) {
+function moveStickyPickup(localPoint, options = {}) {
   if (!stickyPickup || !localPoint) return
 
   stickyPickup.localX = localPoint.x
@@ -1443,7 +1450,7 @@ function moveStickyPickup(localPoint) {
   // kılavuzunu yak ve pointer-up / click ile doğrudan discard'a izin ver.
   stickyStockDiscardReady = Boolean(
     state.stickyPickupSource === 'stock' &&
-    localPoint.x >= DISCARD_TRIGGER_X
+    (localPoint.x >= DISCARD_TRIGGER_X || options.forceDiscard === true)
   )
 
   if (stickyStockDiscardReady) {
@@ -1853,17 +1860,54 @@ function isTileHitboxObject(object) {
   return object?.userData?.tileHitbox === true
 }
 
-function getPrecisePickHit(hits) {
-  // Taşın tamamını kaplayan ana hitbox'ı kullanıyoruz.
-  // Per tutuşu artık küçük dairesel handle'a bağlı değil; basılan noktanın
-  // taşın üst / alt yarısında olmasına göre pointerdown sırasında karar verilir.
-  // Bu sayede alt yarının tamamı geniş ve güvenilir bir per tutma alanıdır.
-  return hits.find(hit =>
-    isTileHitboxObject(hit.object)
-  ) || null
+const mobilePickWorld = new THREE.Vector3()
+const mobilePickProjected = new THREE.Vector3()
+const MOBILE_TILE_PICK_RADIUS_PX = 34
+
+function getMobileFallbackPick(event) {
+  if (!isTouchPointerEvent(event)) return null
+
+  const rect = renderer.domElement.getBoundingClientRect()
+  if (!(rect.width > 0) || !(rect.height > 0)) return null
+
+  let best = null
+  let bestDistance = MOBILE_TILE_PICK_RADIUS_PX
+
+  for (const tileObject of ownTilesGroup.children) {
+    if (!tileObject?.visible || !tileObject.userData?.tileId) continue
+
+    tileObject.getWorldPosition(mobilePickWorld)
+    mobilePickProjected.copy(mobilePickWorld).project(camera)
+
+    if (mobilePickProjected.z < -1 || mobilePickProjected.z > 1) continue
+
+    const screenX = rect.left + (mobilePickProjected.x * 0.5 + 0.5) * rect.width
+    const screenY = rect.top + (-mobilePickProjected.y * 0.5 + 0.5) * rect.height
+    const distance = Math.hypot(event.clientX - screenX, event.clientY - screenY)
+
+    if (distance >= bestDistance) continue
+
+    bestDistance = distance
+    best = {
+      object: tileObject,
+      point: mobilePickWorld.clone(),
+      mobileFallback: true,
+      mobileCenterY: screenY,
+    }
+  }
+
+  return best
 }
 
-function isLowerHalfPick(pickHit, tileId) {
+function getPrecisePickHit(hits, event = null) {
+  // Desktop'ta mevcut raycast davranışı birebir korunur. Touch'ta parmak taşın
+  // birkaç piksel dışına geldiyse en yakın görünen taş güvenli bir yarıçap
+  // içinde seçilir; hitbox'ları fiziksel olarak büyütüp komşuları bindirmeyiz.
+  const exact = hits.find(hit => isTileHitboxObject(hit.object)) || null
+  return exact || getMobileFallbackPick(event)
+}
+
+function isLowerHalfPick(pickHit, tileId, event = null) {
   if (!pickHit?.point || !tileId) return false
 
   const tileObject = ownTilesGroup.children.find(
@@ -1872,13 +1916,16 @@ function isLowerHalfPick(pickHit, tileId) {
 
   if (!tileObject) return false
 
-  // Dünya koordinatındaki tıklama noktasını taşın kendi koordinatına çevir.
-  // Taş merkezi y=0: y < 0 alt yarı, y >= 0 üst yarı.
-  const localPoint = tileObject.worldToLocal(
-    pickHit.point.clone()
-  )
+  if (pickHit.mobileFallback && Number.isFinite(pickHit.mobileCenterY)) {
+    // Parmakla per tutmayı kolaylaştır: ekran merkezinin çok az üstünden
+    // itibaren alt/grup bölgesi sayılır. Desktop yarı-bölgesi değişmez.
+    return event.clientY >= pickHit.mobileCenterY - 4
+  }
 
-  return localPoint.y < 0
+  // Dünya koordinatındaki tıklama noktasını taşın kendi koordinatına çevir.
+  const localPoint = tileObject.worldToLocal(pickHit.point.clone())
+  const groupBias = isTouchPointerEvent(event) ? TILE_HEIGHT * 0.08 : 0
+  return localPoint.y < groupBias
 }
 
 function beginActiveDrag(mode, tileIds, anchorTileId) {
@@ -1999,13 +2046,13 @@ function getClampedDragAnchor(localPoint) {
   }
 }
 
-function moveActiveDrag(localPoint) {
+function moveActiveDrag(localPoint, options = {}) {
   if (!activeDrag) return
 
   const canUseDiscardTarget =
     activeDrag.mode === 'single' &&
     activeDrag.items.length === 1 &&
-    localPoint.x >= DISCARD_TRIGGER_X
+    (localPoint.x >= DISCARD_TRIGGER_X || options.forceDiscard === true)
 
   activeDrag.discardReady = canUseDiscardTarget
 
@@ -3493,7 +3540,7 @@ export function setupRackDragging(
     return (
       elapsed >= 0 &&
       elapsed <= JOKER_DOUBLE_CLICK_MS &&
-      distance <= JOKER_DOUBLE_CLICK_MAX_DISTANCE
+      distance <= getJokerDoubleClickDistance(event, JOKER_DOUBLE_CLICK_MAX_DISTANCE)
     )
   }
 
@@ -3586,6 +3633,7 @@ export function setupRackDragging(
     'pointerdown',
     event => {
       if (event.button !== 0) return
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
 
       state.pointerClientX = event.clientX
       state.pointerClientY = event.clientY
@@ -3604,9 +3652,16 @@ export function setupRackDragging(
 
         if (
           state.stickyPickupSource === 'stock' &&
-          localPoint?.x >= DISCARD_TRIGGER_X
+          (
+            localPoint?.x >= DISCARD_TRIGGER_X ||
+            isMobileDiscardDropPoint(event.clientX, event.clientY)
+          )
         ) {
-          moveStickyPickup(localPoint)
+          const discardPoint = localPoint || {
+            x: DISCARD_TRIGGER_X + 0.10,
+            y: 0.52,
+          }
+          moveStickyPickup(discardPoint, { forceDiscard: true })
           discardStickyStockTile()
           return
         }
@@ -3616,7 +3671,9 @@ export function setupRackDragging(
           return
         }
 
-        moveStickyPickup(localPoint)
+        moveStickyPickup(localPoint, {
+          forceDiscard: isMobileDiscardDropPoint(event.clientX, event.clientY),
+        })
 
         if (commitStickyPickup(localPoint)) {
           setMessage(
@@ -3639,7 +3696,7 @@ export function setupRackDragging(
         true
       )
 
-      const pickHit = getPrecisePickHit(hits)
+      const pickHit = getPrecisePickHit(hits, event)
       if (!pickHit) return
 
       const tileId = findTileIdFromObject(pickHit.object)
@@ -3676,14 +3733,20 @@ export function setupRackDragging(
       press.startX = event.clientX
       press.startY = event.clientY
 
-      renderer.domElement.setPointerCapture(event.pointerId)
+      try {
+        renderer.domElement.setPointerCapture(event.pointerId)
+      }
+      catch {
+        // Eski iOS/WebView varyantlarında explicit capture hata verebilir;
+        // implicit touch capture ile etkileşim yine devam eder.
+      }
 
       // Taş etkileşimi iki yatay bölgeye ayrılır:
       // - Üst yarı: her zaman yalnızca basılan taşı tutar.
       // - Alt yarı: basılan taş geçerli per/çift içindeyse tüm grubu tutar.
       //             Geçerli grup yoksa mevcut davranış korunur ve tek taşı tutar.
       // Görsel yarım-küre aynı kalır; sadece per yakalama hit alanı büyümüştür.
-      if (isLowerHalfPick(pickHit, tileId)) {
+      if (isLowerHalfPick(pickHit, tileId, event)) {
         const meld = findMeldContainingTile(tileId)
 
         if (meld) {
@@ -3722,7 +3785,9 @@ export function setupRackDragging(
         )
 
         if (localPoint) {
-          moveStickyPickup(localPoint)
+          moveStickyPickup(localPoint, {
+            forceDiscard: isMobileDiscardDropPoint(event.clientX, event.clientY),
+          })
         }
 
         return
@@ -3737,7 +3802,7 @@ export function setupRackDragging(
       )
 
       // Çok küçük el titremelerini drop olarak sayma.
-      if (movement > POINTER_MOVE_EPSILON) {
+      if (movement > getPointerMoveThreshold(event, POINTER_MOVE_EPSILON)) {
         activeDrag.hasMoved = true
         clearRackJokerClick()
       }
@@ -3835,7 +3900,9 @@ export function setupRackDragging(
       }
 
       // Mouse basılı olduğu sürece taş / per mouse'u takip eder.
-      moveActiveDrag(localPoint)
+      moveActiveDrag(localPoint, {
+        forceDiscard: isMobileDiscardDropPoint(event.clientX, event.clientY),
+      })
     }
   )
 
@@ -3886,7 +3953,7 @@ export function setupRackDragging(
 
     if (
       isRealJoker(pressedTileData) &&
-      releaseMovement <= JOKER_CLICK_MOVE_TOLERANCE
+      releaseMovement <= getJokerClickMoveTolerance(event, JOKER_CLICK_MOVE_TOLERANCE)
     ) {
       // Çift tık sırasında 1-2 px doğal el/fare oynaması rack drag'i
       // commit etmesin. Gerçek okey için küçük hareketi click sayıp taşı
@@ -3914,6 +3981,11 @@ export function setupRackDragging(
         resetDragState()
         clearPress()
         renderOwnHand()
+        if (isTouchPointerEvent(event)) {
+          window.dispatchEvent(new CustomEvent('okey:mobile-camera', {
+            detail: { action: 'rack' },
+          }))
+        }
         return
       }
     }
@@ -3931,6 +4003,11 @@ export function setupRackDragging(
         setActiveDragObjectsVisible(false)
         resetDragState()
         clearPress()
+        if (isTouchPointerEvent(event)) {
+          window.dispatchEvent(new CustomEvent('okey:mobile-camera', {
+            detail: { action: 'rack' },
+          }))
+        }
         return
       }
     }
@@ -4011,6 +4088,20 @@ export function setupRackDragging(
     'pointercancel',
     event => finishPointer(event, true)
   )
+
+  renderer.domElement.addEventListener(
+    'lostpointercapture',
+    event => {
+      if (press.pointerId === event.pointerId && activeDrag) {
+        finishPointer(event, true)
+      }
+    }
+  )
+
+  window.addEventListener('okey:mobile-gesture-reset', () => {
+    clearRackJokerClick()
+    if (activeDrag) cancelCurrentInteraction()
+  })
 
   // Pointer pencere dışında bırakılırsa takılı kalmasın.
   window.addEventListener(

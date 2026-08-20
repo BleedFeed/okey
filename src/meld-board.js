@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
 import { state } from './state.js'
+import { isTouchPointerEvent } from './mobile.js'
 import {
   scene,
   camera,
@@ -3452,6 +3453,7 @@ function findOpenBoardSeatFromObject(object) {
 
 function onBoardPointerDown(event) {
   if (event.button !== 0) return
+  if (isTouchPointerEvent(event) && !event.isPrimary) return
   if (state.isDraggingTile || state.isStickyPickup || state.isTableInteracting) return
 
   updatePointerFromClient(event.clientX, event.clientY)
@@ -3463,10 +3465,22 @@ function onBoardPointerDown(event) {
     return
   }
 
-  const stagedHits = raycaster.intersectObjects(
+  let stagedHits = raycaster.intersectObjects(
     stagedMeldGroup.children,
     true
   )
+
+  if (stagedHits.length === 0 && isTouchPointerEvent(event)) {
+    // Staged grubu geri alma hedefi telefonda küçük kalabilir. Sadece touch'ta
+    // yakın çevrede birkaç ray dene; masaüstü hit-test tamamen aynı kalır.
+    for (const [dx, dy] of [[0,-18], [0,18], [-18,0], [18,0], [-13,-13], [13,-13], [-13,13], [13,13]]) {
+      updatePointerFromClient(event.clientX + dx, event.clientY + dy)
+      raycaster.setFromCamera(pointer, camera)
+      stagedHits = raycaster.intersectObjects(stagedMeldGroup.children, true)
+      if (stagedHits.length > 0) break
+    }
+    updatePointerFromClient(event.clientX, event.clientY)
+  }
 
   if (stagedHits.length > 0) {
     const stageId = findStageIdFromObject(stagedHits[0].object)
@@ -3475,6 +3489,11 @@ function onBoardPointerDown(event) {
       event.preventDefault()
       event.stopImmediatePropagation()
       returnStageGroup(stageId)
+      if (isTouchPointerEvent(event)) {
+        window.dispatchEvent(new CustomEvent('okey:mobile-camera', {
+          detail: { action: 'rack' },
+        }))
+      }
     }
   }
 }

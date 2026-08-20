@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { state } from './state.js'
+import { isTouchPointerEvent } from './mobile.js'
 import {
   camera,
   renderer,
@@ -260,6 +261,7 @@ export function setupTeaInteractions(socket, setMessage) {
 
   renderer.domElement.addEventListener('pointerdown', event => {
     if (event.button !== 0) return
+    if (isTouchPointerEvent(event) && !event.isPrimary) return
     if (!canClickLocalTea()) return
     if (!isLocalTeaHit(event)) return
 

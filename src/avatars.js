@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { state } from './state.js'
+import { isTouchPointerEvent } from './mobile.js'
 import {
   scene,
   camera,
@@ -442,13 +443,9 @@ function getLocalLobbyPlayer() {
     : null
 }
 
-function getSeatSwapEyeTarget(clientX, clientY) {
+function getSeatSwapEyeTarget(clientX, clientY, touchMode = false) {
   const rect = renderer.domElement.getBoundingClientRect()
   if (!rect.width || !rect.height) return null
-
-  seatSwapPointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
-  seatSwapPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
-  seatSwapRaycaster.setFromCamera(seatSwapPointer, camera)
 
   const eyeParts = []
   for (const [playerId, avatar] of playerAvatars) {
@@ -463,13 +460,25 @@ function getSeatSwapEyeTarget(clientX, clientY) {
     }
   }
 
-  const hit = seatSwapRaycaster.intersectObjects(eyeParts, false)[0]
-  const playerId = hit?.object?.userData?.seatSwapPlayerId
-  if (!playerId) return null
+  const probes = touchMode
+    ? [[0,0], [0,-18], [0,18], [-18,0], [18,0]]
+    : [[0,0]]
 
-  return Array.isArray(state.connectedPlayers)
-    ? state.connectedPlayers.find(player => player.id === playerId) || null
-    : null
+  for (const [dx, dy] of probes) {
+    seatSwapPointer.x = (((clientX + dx) - rect.left) / rect.width) * 2 - 1
+    seatSwapPointer.y = -(((clientY + dy) - rect.top) / rect.height) * 2 + 1
+    seatSwapRaycaster.setFromCamera(seatSwapPointer, camera)
+
+    const hit = seatSwapRaycaster.intersectObjects(eyeParts, false)[0]
+    const playerId = hit?.object?.userData?.seatSwapPlayerId
+    if (!playerId) continue
+
+    return Array.isArray(state.connectedPlayers)
+      ? state.connectedPlayers.find(player => player.id === playerId) || null
+      : null
+  }
+
+  return null
 }
 
 export function setupSeatSwapEyeInteractions(socket, setMessage = () => {}) {
@@ -480,12 +489,17 @@ export function setupSeatSwapEyeInteractions(socket, setMessage = () => {}) {
     'pointerdown',
     event => {
       if (event.button !== 0 || !socket) return
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
       if (!isSeatSwapLobbyPhase()) return
 
       const localPlayer = getLocalLobbyPlayer()
       if (!localPlayer || localPlayer.isBot || localPlayer.ready) return
 
-      const target = getSeatSwapEyeTarget(event.clientX, event.clientY)
+      const target = getSeatSwapEyeTarget(
+        event.clientX,
+        event.clientY,
+        isTouchPointerEvent(event)
+      )
       if (!target || target.id === localPlayer.id) return
 
       // Göz tıklaması koltuk değiştirme etkileşimidir; aynı pointerdown'ın rack,

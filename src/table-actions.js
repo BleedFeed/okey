@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
 import { state } from './state.js'
+import { isTouchPointerEvent } from './mobile.js'
 import {
   scene,
   camera,
@@ -494,19 +495,23 @@ const pointer = new THREE.Vector2()
 const raycaster = new THREE.Raycaster()
 
 let hoverAction = null
+let pointerIsTouch = false
 let stockHoverAmount = 0
 let discardHoverAmount = 0
 let pulseTime = 0
 
-function updatePointer(event) {
+function setPointerFromClient(clientX, clientY) {
   const rect = renderer.domElement.getBoundingClientRect()
+  if (!(rect.width > 0) || !(rect.height > 0)) return false
 
-  pointer.x =
-    ((event.clientX - rect.left) / rect.width) * 2 - 1
+  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  pointer.y = -(((clientY - rect.top) / rect.height) * 2 - 1)
+  return true
+}
 
-  pointer.y =
-    -(((event.clientY - rect.top) / rect.height) * 2 - 1)
-
+function updatePointer(event) {
+  setPointerFromClient(event.clientX, event.clientY)
+  pointerIsTouch = isTouchPointerEvent(event)
   state.pointerClientX = event.clientX
   state.pointerClientY = event.clientY
 }
@@ -936,9 +941,7 @@ function renderDiscardAreas(gameState) {
   takeDiscardGlow.visible = latestExists
 }
 
-function getActionAtPointer() {
-  raycaster.setFromCamera(pointer, camera)
-
+function getActionAtPointer(event = null) {
   const targets = [
     stockHitbox,
     ...(indicatorHitbox.visible ? [indicatorHitbox] : []),
@@ -947,8 +950,29 @@ function getActionAtPointer() {
       .filter(hitbox => hitbox?.visible),
   ]
 
-  const hits = raycaster.intersectObjects(targets, false)
-  const hit = hits[0]
+  raycaster.setFromCamera(pointer, camera)
+  let hit = raycaster.intersectObjects(targets, false)[0] || null
+
+  // Telefon ekranında balya/atık görseli küçük kalabilir. Fiziksel hitbox'ları
+  // büyütmek yerine yalnız touch'ta yakın çevrede birkaç ray örneği alıyoruz;
+  // böylece masaüstü raycast'i ve hedeflerin dünya geometrisi değişmez.
+  if (!hit && isTouchPointerEvent(event)) {
+    const offsets = [
+      [0, -18], [0, 18], [-18, 0], [18, 0],
+      [-13, -13], [13, -13], [-13, 13], [13, 13],
+      [0, -28], [0, 28], [-28, 0], [28, 0],
+    ]
+
+    for (const [dx, dy] of offsets) {
+      if (!setPointerFromClient(event.clientX + dx, event.clientY + dy)) continue
+      raycaster.setFromCamera(pointer, camera)
+      hit = raycaster.intersectObjects(targets, false)[0] || null
+      if (hit) break
+    }
+
+    // Sonraki drag/return hesapları gerçek parmak koordinatından devam etsin.
+    setPointerFromClient(event.clientX, event.clientY)
+  }
 
   if (!hit) return null
 
@@ -1240,7 +1264,7 @@ function isPointerInsideReturnDiscardArea(expanded = false) {
 
   // Giriş alanı zaten sağdaki atma bölgesi gibi affedici. Hedefe
   // yakalandıktan sonra çıkış alanını %30 kadar büyütüyoruz.
-  const releaseScale = expanded ? 1.30 : 1
+  const releaseScale = (expanded ? 1.30 : 1) * (pointerIsTouch ? 1.22 : 1)
   const halfX = TILE_HEIGHT * 1.08 * releaseScale
   const halfZ = TILE_WIDTH * 1.55 * releaseScale
 
@@ -1444,6 +1468,7 @@ export function setupTableInteractions(
     'pointerdown',
     event => {
       if (event.button !== 0) return
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
       if (returnDiscardPending) return
       if (!isStickyDiscardPickupReturnActive()) return
 
@@ -1486,6 +1511,7 @@ export function setupTableInteractions(
     'pointerup',
     event => {
       if (event.button !== 0) return
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
       if (returnDiscardPending) return
       if (!isDraggingReturnableDiscardTile()) return
 
@@ -1539,6 +1565,7 @@ export function setupTableInteractions(
   renderer.domElement.addEventListener(
     'pointermove',
     event => {
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
       updatePointer(event)
 
       updateReturnDiscardTarget()
@@ -1577,7 +1604,7 @@ export function setupTableInteractions(
         return
       }
 
-      const target = getActionAtPointer()
+      const target = getActionAtPointer(event)
       hoverAction = target?.action || null
       updateCursor()
     }
@@ -1589,11 +1616,12 @@ export function setupTableInteractions(
     'pointerdown',
     event => {
       if (event.button !== 0) return
+      if (isTouchPointerEvent(event) && !event.isPrimary) return
       if (state.isDraggingTile) return
       if (state.pendingTablePickup || state.isStickyPickup) return
 
       updatePointer(event)
-      const target = getActionAtPointer()
+      const target = getActionAtPointer(event)
 
       // Masada başka bir yere tıklamak açık incelemeyi kapatır. Rack'in kendi
       // pointerdown akışına müdahale etmiyoruz.

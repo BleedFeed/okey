@@ -40,6 +40,12 @@ import {
   setupTeaInteractions,
   updateTeaAnimation,
 } from './tea-actions.js'
+import {
+  isTouchLayout,
+  isTouchPointerEvent,
+  setupMobileUi,
+  updateMobileUi,
+} from './mobile.js'
 
 const PLAYER_NAME_STORAGE_KEY = 'okey101-player-name'
 
@@ -94,6 +100,7 @@ setupRackDragging(
 )
 setupTableInteractions(socket, setMessage)
 setupTeaInteractions(socket, setMessage)
+setupMobileUi()
 
 // Tarayıcılar güvenlik nedeniyle özel metni her zaman göstermese de, aktif
 // oyun sırasında sekme kapatma / yenileme / sayfadan ayrılma için native
@@ -232,8 +239,11 @@ let boardInspectorPanState = null
 let boardInspectorObservedRound = null
 const boardInspectorObservedSeats = new Set()
 const boardInspectorEntries = new Map()
+let boardInspectorMobileSeat = null
+let boardInspectorMobileTabsSignature = ''
 
 const boardInspectorToggleButton = document.createElement('button')
+boardInspectorToggleButton.id = 'opened-board-inspector-toggle'
 boardInspectorToggleButton.type = 'button'
 boardInspectorToggleButton.textContent = 'AÇILAN TAŞLAR'
 boardInspectorToggleButton.setAttribute('aria-label', 'Açılan taşları göster veya gizle')
@@ -279,6 +289,60 @@ boardInspectorPanel.style.cssText = `
 `
 
 document.body.appendChild(boardInspectorPanel)
+
+const boardInspectorMobileTabs = document.createElement('div')
+boardInspectorMobileTabs.id = 'opened-board-mobile-tabs'
+boardInspectorMobileTabs.style.cssText = `
+  position: absolute;
+  left: 7px;
+  right: 50px;
+  top: 6px;
+  z-index: 5;
+  display: none;
+  gap: 5px;
+  pointer-events: auto;
+  overflow: hidden;
+`
+boardInspectorPanel.appendChild(boardInspectorMobileTabs)
+
+const boardInspectorMobileZoom = document.createElement('div')
+boardInspectorMobileZoom.id = 'opened-board-mobile-zoom'
+boardInspectorMobileZoom.style.cssText = `
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 5;
+  display: none;
+  gap: 4px;
+  pointer-events: auto;
+`
+boardInspectorPanel.appendChild(boardInspectorMobileZoom)
+
+function makeBoardInspectorMobileZoomButton(label, action, ariaLabel) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.textContent = label
+  button.dataset.inspectorZoomAction = action
+  button.setAttribute('aria-label', ariaLabel)
+  button.style.cssText = `
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 8px;
+    background: rgba(12,16,14,.88);
+    color: #fff;
+    font: 900 17px/1 "Segoe UI", sans-serif;
+    pointer-events: auto;
+    touch-action: manipulation;
+  `
+  return button
+}
+
+boardInspectorMobileZoom.append(
+  makeBoardInspectorMobileZoomButton('−', 'out', 'Uzaklaştır'),
+  makeBoardInspectorMobileZoomButton('+', 'in', 'Yakınlaştır')
+)
 
 const boardInspectorCloseButton = document.createElement('button')
 boardInspectorCloseButton.type = 'button'
@@ -358,8 +422,17 @@ function closeBoardInspector() {
   boardInspectorRound = null
   boardInspectorEntries.clear()
   for (const child of [...boardInspectorPanel.children]) {
-    if (child !== boardInspectorCloseButton) child.remove()
+    if (
+      child !== boardInspectorCloseButton &&
+      child !== boardInspectorMobileTabs &&
+      child !== boardInspectorMobileZoom
+    ) {
+      child.remove()
+    }
   }
+  boardInspectorMobileSeat = null
+  boardInspectorMobileTabsSignature = ''
+  boardInspectorMobileTabs.replaceChildren()
   boardInspectorPanel.style.display = 'none'
   updateBoardInspectorButton()
 
@@ -444,6 +517,124 @@ function createBoardInspectorEntry(seat) {
   }
 }
 
+function syncBoardInspectorMobileChrome(seats) {
+  const mobile = isTouchLayout()
+
+  if (!mobile) {
+    boardInspectorMobileTabs.style.display = 'none'
+    boardInspectorMobileZoom.style.display = 'none'
+    boardInspectorPanel.style.top = '45px'
+    boardInspectorPanel.style.height = 'min(25vh, 270px)'
+    boardInspectorPanel.style.minHeight = '185px'
+    boardInspectorCloseButton.style.width = '27px'
+    boardInspectorCloseButton.style.height = '27px'
+
+    for (const entry of boardInspectorEntries.values()) {
+      entry.wrapper.style.display = 'flex'
+    }
+    return
+  }
+
+  if (!seats.includes(boardInspectorMobileSeat)) {
+    boardInspectorMobileSeat =
+      seats.find(seat => seat !== state.localSeat) ||
+      seats[0] ||
+      null
+  }
+
+  const signature = seats.join('|')
+  if (signature !== boardInspectorMobileTabsSignature) {
+    boardInspectorMobileTabsSignature = signature
+    boardInspectorMobileTabs.replaceChildren()
+
+    for (const seat of seats) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.dataset.inspectorSeat = seat
+      button.textContent = getBoardInspectorPlayerName(seat)
+      button.style.cssText = `
+        flex: 1 1 0;
+        min-width: 0;
+        height: 34px;
+        padding: 0 8px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 8px;
+        background: rgba(12,16,14,.82);
+        color: rgba(246,241,223,.9);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: 800 9px/1 "Segoe UI", sans-serif;
+        pointer-events: auto;
+        touch-action: manipulation;
+      `
+      button.addEventListener('pointerdown', event => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      })
+      button.addEventListener('click', event => {
+        event.preventDefault()
+        event.stopPropagation()
+        boardInspectorMobileSeat = seat
+      })
+      boardInspectorMobileTabs.appendChild(button)
+    }
+  }
+
+  for (const button of boardInspectorMobileTabs.querySelectorAll('button')) {
+    button.textContent = getBoardInspectorPlayerName(button.dataset.inspectorSeat)
+    const active = button.dataset.inspectorSeat === boardInspectorMobileSeat
+    button.style.borderColor = active
+      ? 'rgba(255,222,132,.58)'
+      : 'rgba(255,255,255,.15)'
+    button.style.color = active ? '#ffe096' : 'rgba(246,241,223,.9)'
+  }
+
+  for (const [seat, entry] of boardInspectorEntries) {
+    entry.wrapper.style.display = seat === boardInspectorMobileSeat ? 'flex' : 'none'
+  }
+
+  boardInspectorMobileTabs.style.display = seats.length > 1 ? 'flex' : 'none'
+  boardInspectorMobileZoom.style.display = 'flex'
+  boardInspectorPanel.style.top = 'calc(54px + env(safe-area-inset-top, 0px))'
+  boardInspectorPanel.style.height = `${Math.round(
+    THREE.MathUtils.clamp(window.innerHeight * 0.35, 176, 286)
+  )}px`
+  boardInspectorPanel.style.minHeight = '0'
+  boardInspectorCloseButton.style.width = '36px'
+  boardInspectorCloseButton.style.height = '36px'
+}
+
+boardInspectorMobileZoom.addEventListener('pointerdown', event => {
+  event.preventDefault()
+  event.stopImmediatePropagation()
+}, true)
+
+boardInspectorMobileZoom.addEventListener('click', event => {
+  const action = event.target?.dataset?.inspectorZoomAction
+  if (!action || !isTouchLayout()) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const entry = boardInspectorEntries.get(boardInspectorMobileSeat)
+  if (!entry) return
+
+  if (action === 'in') {
+    entry.zoomLevel = Math.min(BOARD_INSPECTOR_MAX_ZOOM_LEVEL, entry.zoomLevel + 1)
+  }
+  else if (action === 'out') {
+    entry.zoomLevel = Math.max(0, entry.zoomLevel - 1)
+  }
+
+  if (entry.zoomLevel === 0) {
+    entry.panOffset.set(0, 0, 0)
+  }
+  else {
+    clampBoardInspectorPan(entry)
+  }
+})
+
 function syncBoardInspectorEntries() {
   if (!boardInspectorPanelOpen) return
 
@@ -475,20 +666,30 @@ function syncBoardInspectorEntries() {
       boardInspectorPanel.appendChild(entry.wrapper)
     }
   }
-  boardInspectorPanel.appendChild(boardInspectorCloseButton)
+  boardInspectorPanel.append(
+    boardInspectorMobileTabs,
+    boardInspectorMobileZoom,
+    boardInspectorCloseButton
+  )
 
   const count = seats.length
-  const viewportLimit = window.innerWidth * BOARD_INSPECTOR_PANEL_VIEWPORT_RATIO
-  const desiredWidth = Math.max(
-    300,
-    Math.min(
-      BOARD_INSPECTOR_MAX_PANEL_WIDTH,
-      viewportLimit,
-      Math.max(BOARD_INSPECTOR_FRAME_MIN_WIDTH * count, 360)
+  if (isTouchLayout()) {
+    boardInspectorPanel.style.width = `${Math.max(280, window.innerWidth - 16)}px`
+  }
+  else {
+    const viewportLimit = window.innerWidth * BOARD_INSPECTOR_PANEL_VIEWPORT_RATIO
+    const desiredWidth = Math.max(
+      300,
+      Math.min(
+        BOARD_INSPECTOR_MAX_PANEL_WIDTH,
+        viewportLimit,
+        Math.max(BOARD_INSPECTOR_FRAME_MIN_WIDTH * count, 360)
+      )
     )
-  )
-  boardInspectorPanel.style.width = `${Math.round(desiredWidth)}px`
+    boardInspectorPanel.style.width = `${Math.round(desiredWidth)}px`
+  }
 
+  syncBoardInspectorMobileChrome(seats)
 }
 
 function openBoardInspector() {
@@ -653,7 +854,12 @@ window.addEventListener('pointerdown', event => {
   // frame-sonu bayrakları burada kullanılmaz; onlar bir frame geç temizlenirse
   // panel pan'i yanlışlıkla tamamen kilitleyebiliyordu.
   if (state.isDraggingTile || state.isStickyPickup || state.stickyPickupTileId) return
-  if (event.target === boardInspectorCloseButton || event.target === boardInspectorToggleButton) return
+  if (
+    event.target === boardInspectorCloseButton ||
+    event.target === boardInspectorToggleButton ||
+    event.target?.closest?.('#opened-board-mobile-tabs') ||
+    event.target?.closest?.('#opened-board-mobile-zoom')
+  ) return
 
   const hit = getBoardInspectorEntryAt(event.clientX, event.clientY)
   if (!hit || (hit.entry.zoomLevel || 0) === 0) return
@@ -1133,15 +1339,17 @@ function canCurrentDragEnterOverview() {
   return kind === 'single' || kind === 'meld' || kind === 'pair'
 }
 
-function updateOverviewRequest(pointerY) {
+function updateOverviewRequest(pointerY, touchMode = false) {
   if (isCameraTransitionLocked()) {
     overviewRequested = false
     resetOverviewEdgeTrigger()
     return
   }
 
-  const enterY = window.innerHeight * OVERVIEW_ENTER_RATIO
-  const exitY = window.innerHeight * OVERVIEW_EXIT_RATIO
+  const enterRatio = touchMode ? 0.30 : OVERVIEW_ENTER_RATIO
+  const exitRatio = touchMode ? 0.82 : OVERVIEW_EXIT_RATIO
+  const enterY = window.innerHeight * enterRatio
+  const exitY = window.innerHeight * exitRatio
 
   if (overviewRequested) {
     // Üst kamera aktifken dikey konum kamera yüksekliğini oynatmaz. Yukarı
@@ -1167,8 +1375,18 @@ function updateOverviewRequest(pointerY) {
 }
 
 document.addEventListener('pointermove', event => {
+  if (isTouchPointerEvent(event) && !event.isPrimary) return
+
   state.pointerClientX = event.clientX
   state.pointerClientY = event.clientY
+
+  // Desktop'taki manuel W/S kamera davranışına dokunma. Telefonda ise aktif
+  // taş/per parmakla ekranın üstüne taşındığında açma kamerasını otomatik aç;
+  // aksi halde kullanıcı sürüklerken ikinci parmakla kamera düğmesine basmak
+  // zorunda kalır.
+  if (isTouchPointerEvent(event) && state.isDraggingTile) {
+    updateOverviewRequest(event.clientY, true)
+  }
 
   // Kamera artık mouse ile kontrol edilmiyor. Pointer yalnız taş etkileşimleri
   // ve diğer oyuncuların göz yönü için kullanılmaya devam eder.
@@ -1265,6 +1483,37 @@ window.addEventListener('keydown', event => {
 
   event.preventDefault()
   overviewFocusSeat = state.localSeat || 'player-bottom'
+  overviewRequested = true
+  overviewVectorsInitialized = false
+  overviewTopJumpRequested = false
+  syncOverviewFocusState()
+  resetOverviewEdgeTrigger()
+})
+
+window.addEventListener('okey:mobile-camera', event => {
+  if (!isTouchLayout() || isCameraTransitionLocked()) return
+
+  const action = event.detail?.action
+
+  if (action === 'rack') {
+    overviewRequested = false
+    overviewTopJumpRequested = false
+    resetOverviewEdgeTrigger()
+    return
+  }
+
+  if (action === 'opening') {
+    const activeOpeningSeat = getWatchableOpeningSeat()
+    if (!activeOpeningSeat) return
+    overviewFocusSeat = activeOpeningSeat
+  }
+  else if (action === 'board') {
+    overviewFocusSeat = state.localSeat || 'player-bottom'
+  }
+  else {
+    return
+  }
+
   overviewRequested = true
   overviewVectorsInitialized = false
   overviewTopJumpRequested = false
@@ -1481,6 +1730,7 @@ function animate(now = performance.now()) {
   updateRackInteractionAnimation()
   updateTableInteractionAnimation()
   updateTeaAnimation(now)
+  updateMobileUi()
 
   for (const [id, avatar] of playerAvatars) {
     if (id === state.localPlayerId) {
