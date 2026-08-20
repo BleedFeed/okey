@@ -1,4 +1,8 @@
 export const state = {
+  currentTableId: null,
+  tableList: [],
+  matchmakingMode: true,
+  returningToMatchmaker: false,
   localPlayerId: null,
   localSeat: null,
   connectedPlayers: [],

@@ -105,9 +105,11 @@ function createTeaMicroSurfaceTexture(size = 128) {
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
   texture.repeat.set(3.5, 5.0)
-  texture.minFilter = THREE.LinearMipmapLinearFilter
+  // Procedural micro-surface is tiny and close-range; avoid forcing a
+  // mipmap generation pass that can trigger Firefox/WebGL lazy texture init.
+  texture.minFilter = THREE.LinearFilter
   texture.magFilter = THREE.LinearFilter
-  texture.generateMipmaps = true
+  texture.generateMipmaps = false
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
   texture.colorSpace = THREE.NoColorSpace
   texture.needsUpdate = true
@@ -313,11 +315,10 @@ function configureRackModelShadows(root) {
         const texture = material[slot]
         if (!texture) continue
 
+        // GLTFLoader has already configured filtering/mipmaps. These textures
+        // have not rendered yet, so anisotropy can be raised without forcing a
+        // second upload or generateMipmap pass.
         texture.anisotropy = maxAnisotropy
-        texture.minFilter = THREE.LinearMipmapLinearFilter
-        texture.magFilter = THREE.LinearFilter
-        texture.generateMipmaps = true
-        texture.needsUpdate = true
       }
 
       material.needsUpdate = true
@@ -439,11 +440,10 @@ function configureOrisModel(root) {
         const texture = material[slot]
         if (!texture) continue
 
+        // GLTFLoader has already configured filtering/mipmaps. These textures
+        // have not rendered yet, so anisotropy can be raised without forcing a
+        // second upload or generateMipmap pass.
         texture.anisotropy = maxAnisotropy
-        texture.minFilter = THREE.LinearMipmapLinearFilter
-        texture.magFilter = THREE.LinearFilter
-        texture.generateMipmaps = true
-        texture.needsUpdate = true
       }
 
       material.needsUpdate = true
@@ -648,11 +648,10 @@ function applyHighQualityTextureFiltering(materials) {
       const texture = material[slot]
       if (!texture) continue
 
+      // Preserve the filtering/mipmap state supplied by GLTFLoader. Forcing
+      // needsUpdate here causes an unnecessary texture re-upload and may make
+      // Firefox lazily initialise level 0 during generateMipmap.
       texture.anisotropy = maxAnisotropy
-      texture.minFilter = THREE.LinearMipmapLinearFilter
-      texture.magFilter = THREE.LinearFilter
-      texture.generateMipmaps = true
-      texture.needsUpdate = true
     }
 
     material.needsUpdate = true

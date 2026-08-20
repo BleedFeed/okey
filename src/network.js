@@ -143,6 +143,40 @@ function clearHumanReadyFlagsLocally() {
   }
 }
 
+
+export function resetClientToMatchmaker() {
+  clearPendingRoundStartTurnSound()
+
+  state.currentTableId = null
+  state.matchmakingMode = true
+  state.returningToMatchmaker = false
+  state.localPlayerId = null
+  state.localSeat = null
+  state.connectedPlayers = []
+  state.publicGameState = null
+  state.privateHandState = null
+  state.selectedTileId = null
+  state.pendingTablePickup = null
+  state.isTableInteracting = false
+
+  resetRackForNewRound()
+  resetTableVisualState()
+  resetMeldBoardVisualState(null)
+  resetTeaTransientVisuals()
+
+  for (const id of [...playerAvatars.keys()]) {
+    removeAvatar(id)
+  }
+
+  for (const seat of Object.keys(opponentTileGroups)) {
+    clearGroup(opponentTileGroups[seat])
+  }
+
+  setCurrentTurnSeat(null)
+  updateHUD()
+  window.dispatchEvent(new CustomEvent('okey:matchmaker-reset'))
+}
+
 export function createSocket(playerName) {
   const socket = io('https://site--sunucu--pjsj9fxyzfvl.code.run', {
     auth: {
@@ -157,6 +191,8 @@ export function createSocket(playerName) {
   socket.on('you-joined', player => {
     state.localPlayerId = player.id
     state.localSeat = player.seat
+    state.currentTableId = player.tableId || state.currentTableId
+    state.matchmakingMode = false
 
     setLocalSeat(state.localSeat)
     attachTableActionsToSeat(state.localSeat)

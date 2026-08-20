@@ -25,6 +25,7 @@ import {
 } from './avatars.js'
 import { setMessage, setupBotControls } from './hud.js'
 import { createSocket } from './network.js'
+import { setupMatchmaking } from './matchmaking.js'
 import {
   setupTableInteractions,
   updateTableInteractionAnimation,
@@ -68,6 +69,7 @@ catch {
 }
 
 const socket = createSocket(playerName)
+setupMatchmaking(socket, setMessage)
 setupBotControls(socket)
 setupSeatSwapEyeInteractions(socket, setMessage)
 
