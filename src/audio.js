@@ -9,6 +9,8 @@ const SOUND_PATHS = Object.freeze({
   'round-deal': '/sounds/round_deal.mp3',
   'discard-first': '/sounds/discard_first.mp3',
   'discard-stack': '/sounds/discard_stack.mp3',
+  // Herhangi bir oyuncu gerçek okey attığında bütün clientlarda çalar.
+  'okey-discard': '/sounds/okey_discard.mp3',
   'meld-place': '/sounds/meld_place.mp3',
   // Mevcut açılmış pere tek taş işleme / okey değiştirme sesi.
   'tile-layoff': '/sounds/tile_layoff.mp3',
@@ -23,6 +25,7 @@ const SOUND_VOLUMES = Object.freeze({
   'round-deal': 0.82,
   'discard-first': 0.78,
   'discard-stack': 0.78,
+  'okey-discard': 0.86,
   'meld-place': 0.76,
   'tile-layoff': 0.72,
   'your-turn': 0.80,

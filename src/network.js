@@ -398,6 +398,13 @@ export function createSocket(playerName) {
       return
     }
 
+    if (type === 'okey-discard') {
+      // Okey atışı masa çapında bir olaydır: atan kişinin uzaklığına göre
+      // kısmadan bütün bağlı oyuncularda aynı özel sesi çal.
+      playGameSound('okey-discard')
+      return
+    }
+
     if (type === 'tile-layoff' || type === 'tea-sip' || type === 'tea-refill') {
       playGameSound(type, { volumeScale })
       return
