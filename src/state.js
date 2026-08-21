@@ -38,6 +38,9 @@ export const state = {
   returnableDiscardIndex: null,
   returnDiscardDropReady: false,
 
+  // Mobilde balyadan yeni çekilen taş, tur bitene kadar kısa bir vurgu taşır.
+  stockDrawHighlightTileId: null,
+
   pointerClientX: 0,
   pointerClientY: 0,
 

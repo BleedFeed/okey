@@ -892,6 +892,34 @@ export function getRowXPositions(rowIndex, handMap = getHandMap()) {
   return positions
 }
 
+
+function addStockDrawHighlight(tile) {
+  if (!tile) return
+
+  const glowGeometry = new THREE.BoxGeometry(
+    TILE_WIDTH + 0.046,
+    TILE_HEIGHT + 0.046,
+    TILE_DEPTH + 0.030
+  )
+  const edgesGeometry = new THREE.EdgesGeometry(glowGeometry)
+  glowGeometry.dispose()
+
+  const glowMaterial = new THREE.LineBasicMaterial({
+    color: 0x7fffd4,
+    transparent: true,
+    opacity: 0.96,
+    depthTest: false,
+    depthWrite: false,
+  })
+
+  const glow = new THREE.LineSegments(edgesGeometry, glowMaterial)
+  glow.name = 'stockDrawHighlight'
+  glow.userData.stockDrawHighlight = true
+  glow.renderOrder = 92
+  glow.position.z = 0.006
+  tile.add(glow)
+}
+
 function addPickedDiscardMarker(tile) {
   if (!tile) return
 
@@ -947,6 +975,7 @@ export function resetRackForNewRound() {
   state.selectedTileId = null
   state.pendingTablePickup = null
   state.isTableInteracting = false
+  state.stockDrawHighlightTileId = null
   flippedRackJokerIds.clear()
 
   clearGroup(ownTilesGroup)
@@ -1127,6 +1156,10 @@ export function renderOwnHand() {
 
       if (id === state.returnableDiscardTileId) {
         addPickedDiscardMarker(tile)
+      }
+
+      if (id === state.stockDrawHighlightTileId) {
+        addStockDrawHighlight(tile)
       }
 
       ownTilesGroup.add(tile)
@@ -3402,11 +3435,16 @@ export function updateRackInteractionAnimation() {
   const markerPulse =
     0.82 + (Math.sin(discardGuidePulse * 0.72) + 1) * 0.09
 
-  ownTilesGroup.traverse(child => {
-    if (!child.userData?.pickedDiscardMarker) return
+  const stockPulse =
+    0.58 + (Math.sin(discardGuidePulse * 0.95) + 1) * 0.20
 
-    if (child.material) {
+  ownTilesGroup.traverse(child => {
+    if (child.userData?.pickedDiscardMarker && child.material) {
       child.material.opacity = markerPulse
+    }
+
+    if (child.userData?.stockDrawHighlight && child.material) {
+      child.material.opacity = stockPulse
     }
   })
 

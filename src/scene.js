@@ -71,26 +71,26 @@ function updateResponsiveSeatCameraSettings() {
       // yaklaşık 1.7-1.9 world-unit uzağa getirir: taşlar büyük kalırken 3.85
       // world-unit rack genişliği 16:9 telefonda dahi kesilmez.
       if (aspect >= 2.10) {
-        distance = 4.90
-        fov = 60
+        distance = 4.78
+        fov = 58
       }
       else if (aspect >= 1.90) {
-        distance = 4.96
-        fov = 63
+        distance = 4.82
+        fov = 60
       }
       else if (aspect >= 1.74) {
-        distance = 5.00
-        fov = 66
+        distance = 4.86
+        fov = 63
       }
       else {
-        distance = 5.05
-        fov = 70
+        distance = 4.92
+        fov = 67
       }
 
-      // Göz hizasına yakın kamera, taş yüzlerini neredeyse karşıdan gösterir.
-      // Look target main.js'te rack'in biraz üstüne kaydırıldığı için rack
-      // ekranın alt yarısında kalır.
-      height = 1.90
+      // Rack taş merkezleri world-Y yaklaşık 1.5-1.8 aralığında. Kamera da
+      // aynı göz hizasına alınır; main.js hedefiyle Y eşit olduğu için mobil
+      // görünüm artık aşağıdan yukarı değil, doğrudan karşıdan bakar.
+      height = 1.70
     }
     else {
       // Portrait oyun orientation overlay ile kilitlidir. Resize sırasında

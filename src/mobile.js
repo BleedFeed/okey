@@ -117,6 +117,21 @@ export function isMobileDiscardDropPoint(clientX, clientY) {
   return false
 }
 
+export function isMobileIncomingDiscardDropPoint(clientX, clientY) {
+  if (!isTouchLayout()) return false
+
+  const panel = document.getElementById('okey-mobile-incoming-discard')
+  if (!panel?.classList.contains('visible')) return false
+
+  const rect = panel.getBoundingClientRect()
+  if (rect.width <= 1 || rect.height <= 1) return false
+
+  return (
+    clientX >= rect.left && clientX <= rect.right &&
+    clientY >= rect.top && clientY <= rect.bottom
+  )
+}
+
 function installStyles() {
   if (stylesInstalled) return
   stylesInstalled = true
@@ -945,6 +960,100 @@ function installStyles() {
         border-radius: 10px !important;
       }
     }
+
+    /* Son mobil oyun kompozisyonu: waiting/lobide HAZIR + nick HUD'u aynen
+       görünür. Oyun başladığında sol üst HUD tamamen kalkar; alt-orta yalnız
+       büyük ıstakaya ayrılır. */
+    .okey-touch-ui.okey-mobile-landscape.okey-mobile-playing #game-hud {
+      display: none !important;
+    }
+
+    .okey-touch-ui #okey-mobile-incoming-discard.return-ready {
+      border-color: rgba(255, 204, 92, .88) !important;
+      box-shadow: 0 0 0 2px rgba(255, 204, 92, .13), 0 8px 24px rgba(0,0,0,.30) !important;
+    }
+
+    @media (orientation: landscape) {
+      /* Sohbet: sol-alt, açılmış hali bile küçük. Rack'in yalnız en sol dış
+         köşesini kullanır; merkez taş alanını kapatmaz. */
+      .okey-touch-ui #chat-dock-button {
+        left: calc(7px + var(--okey-safe-left, 0px)) !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: calc(7px + var(--okey-safe-bottom, 0px)) !important;
+        width: 32px !important;
+        min-width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+      }
+
+      .okey-touch-ui #social-panel {
+        left: calc(7px + var(--okey-safe-left, 0px)) !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: calc(7px + var(--okey-safe-bottom, 0px)) !important;
+        width: min(220px, 29vw) !important;
+        max-height: min(42dvh, 148px) !important;
+        padding: 5px !important;
+        border-radius: 8px !important;
+        z-index: 176 !important;
+      }
+
+      .okey-touch-ui #social-panel #chat-log {
+        max-height: 58px !important;
+        font-size: 9px !important;
+      }
+
+      .okey-touch-ui #social-panel button,
+      .okey-touch-ui #social-panel input,
+      .okey-touch-ui #chat-input,
+      .okey-touch-ui #chat-send-button {
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 9px !important;
+      }
+
+      .okey-touch-ui.okey-mobile-keyboard-open #social-panel {
+        left: calc(5px + var(--okey-safe-left, 0px)) !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: calc(5px + var(--okey-safe-bottom, 0px)) !important;
+        width: min(300px, 42vw) !important;
+        max-height: min(68dvh, 210px) !important;
+      }
+
+      /* Puan defteri TAŞ AT floating alanının üst katmanında durur. Kapalı
+         düğme discard panelinin hemen üstünde; açıldığında sağ tarafta overlay
+         olur ve ıstakanın merkezini mümkün olduğunca serbest bırakır. */
+      .okey-touch-ui #score-notebook {
+        right: calc(8px + var(--okey-safe-right, 0px)) !important;
+        top: calc(31% - 60px) !important;
+        z-index: 188 !important;
+      }
+
+      .okey-touch-ui #score-notebook:not(.is-open) {
+        width: clamp(82px, 10.5vw, 96px) !important;
+        max-height: 32px !important;
+      }
+
+      .okey-touch-ui #score-notebook-toggle {
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 18px 0 7px !important;
+        font-size: 8px !important;
+      }
+
+      .okey-touch-ui #score-notebook.is-open {
+        top: calc(6px + var(--okey-safe-top, 0px)) !important;
+        width: min(330px, 43vw) !important;
+        max-height: calc(var(--okey-visible-height, 100dvh) - 12px) !important;
+      }
+
+      .okey-touch-ui #score-notebook-body {
+        max-height: calc(var(--okey-visible-height, 100dvh) - 46px) !important;
+      }
+    }
+
   `
 
   document.head.appendChild(style)
@@ -1024,6 +1133,17 @@ function ensureMobileDom() {
   incomingDiscardWell.addEventListener('click', event => {
     event.preventDefault()
     event.stopPropagation()
+
+    const canReturn = Boolean(
+      (state.isStickyPickup && state.stickyPickupSource === 'discard') ||
+      state.returnableDiscardTileId
+    )
+
+    if (canReturn) {
+      window.dispatchEvent(new CustomEvent('okey:mobile-return-discard'))
+      return
+    }
+
     if (!mobileDiscardState.canTake) return
     window.dispatchEvent(new CustomEvent('okey:mobile-take-discard'))
   })
@@ -1114,17 +1234,25 @@ function syncMobileDiscardWells() {
   renderMobileMiniTile(incomingDiscardTileFace, mobileDiscardState.leftTile)
   renderMobileMiniTile(outgoingDiscardTileFace, mobileDiscardState.ownTile)
 
+  const canReturnDiscard = Boolean(
+    (state.isStickyPickup && state.stickyPickupSource === 'discard') ||
+    state.returnableDiscardTileId
+  )
+
   if (incomingDiscardStatus) {
-    incomingDiscardStatus.textContent = !mobileDiscardState.leftTile
-      ? 'ATIK YOK'
-      : mobileDiscardState.canTake
-        ? 'DOKUN VE AL'
-        : mobileDiscardState.blockedPlayable
-          ? 'İŞLEK'
-          : 'BEKLE'
+    incomingDiscardStatus.textContent = canReturnDiscard
+      ? 'GERİ BIRAK'
+      : !mobileDiscardState.leftTile
+        ? 'ATIK YOK'
+        : mobileDiscardState.canTake
+          ? 'DOKUN VE AL'
+          : mobileDiscardState.blockedPlayable
+            ? 'İŞLEK'
+            : 'BEKLE'
   }
 
-  incomingDiscardWell?.classList.toggle('can-take', mobileDiscardState.canTake)
+  incomingDiscardWell?.classList.toggle('can-take', mobileDiscardState.canTake || canReturnDiscard)
+  incomingDiscardWell?.classList.toggle('return-ready', canReturnDiscard)
   incomingDiscardWell?.classList.toggle(
     'blocked',
     Boolean(mobileDiscardState.leftTile && mobileDiscardState.blockedPlayable)
@@ -1132,7 +1260,7 @@ function syncMobileDiscardWells() {
   if (incomingDiscardWell) {
     incomingDiscardWell.setAttribute(
       'aria-disabled',
-      mobileDiscardState.canTake ? 'false' : 'true'
+      (mobileDiscardState.canTake || canReturnDiscard) ? 'false' : 'true'
     )
   }
 

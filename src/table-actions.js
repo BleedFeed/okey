@@ -1,7 +1,10 @@
 import * as THREE from 'three'
 
 import { state } from './state.js'
-import { isTouchPointerEvent } from './mobile.js'
+import {
+  isMobileIncomingDiscardDropPoint,
+  isTouchPointerEvent,
+} from './mobile.js'
 import {
   scene,
   camera,
@@ -20,6 +23,7 @@ import {
   cancelRackDragVisual,
   cancelStickyPickupVisual,
   isDraggingReturnableDiscardTile,
+  renderOwnHand,
 } from './rack.js'
 import {
   TILE_WIDTH,
@@ -501,6 +505,7 @@ let discardHoverAmount = 0
 let pulseTime = 0
 let mobileTakeDiscardListener = null
 let mobileDrawStockListener = null
+let mobileReturnDiscardListener = null
 
 function setPointerFromClient(clientX, clientY) {
   const rect = renderer.domElement.getBoundingClientRect()
@@ -1259,6 +1264,19 @@ function updateReturnDiscardTarget() {
 function isPointerInsideReturnDiscardArea(expanded = false) {
   if (!returnDiscardHitbox.visible) return false
 
+  // Telefonda fiziksel 3D discard stack'i kamerada görünmek zorunda değil.
+  // Soldaki floating SOLDAN AL paneli, yandan alınmış taşı geri bırakmak için
+  // aynı authoritative cancel-discard-pick hedefi olarak davranır.
+  if (
+    pointerIsTouch &&
+    isMobileIncomingDiscardDropPoint(
+      Number(state.pointerClientX) || -9999,
+      Number(state.pointerClientY) || -9999
+    )
+  ) {
+    return true
+  }
+
   const returnInfo = getActiveReturnDiscardInfo()
   const seat = returnInfo?.seat || null
   const index = returnInfo?.index ?? null
@@ -1576,6 +1594,52 @@ export function setupTableInteractions(
     }, socket, setMessage)
   }
   window.addEventListener('okey:mobile-take-discard', mobileTakeDiscardListener)
+
+  // Mobil floating SOLDAN AL paneli, taş sticky haldeyken de rack'e
+  // yerleştirildikten sonra da geri bırakma düğmesi gibi çalışır. Server'daki
+  // cancel-discard-pick doğrulaması değişmez.
+  if (mobileReturnDiscardListener) {
+    window.removeEventListener('okey:mobile-return-discard', mobileReturnDiscardListener)
+  }
+  mobileReturnDiscardListener = () => {
+    if (returnDiscardPending) return
+
+    const returnInfo = getActiveReturnDiscardInfo()
+    if (!returnInfo || !isMyTurn()) {
+      setMessage('Geri bırakılabilecek yandan alınmış taş yok.')
+      return
+    }
+
+    returnDiscardPending = true
+    state.returnDiscardDropReady = false
+    setMessage('Yandan alınan taş geri bırakılıyor…')
+
+    socket.emit('cancel-discard-pick', result => {
+      returnDiscardPending = false
+
+      if (!result?.ok) {
+        setMessage(result?.message || 'Taş geri bırakılamadı.')
+        updateReturnDiscardTarget()
+        return
+      }
+
+      if (returnInfo.sticky) {
+        cancelStickyPickupVisual({ render: false })
+      } else {
+        state.returnableDiscardTileId = null
+        state.returnableDiscardSeat = null
+        state.returnableDiscardIndex = null
+        cancelRackDragVisual({ render: false })
+        renderOwnHand()
+      }
+
+      returnDragCaptureActive = false
+      state.returnDiscardDropReady = false
+      updateReturnDiscardTarget()
+      setMessage('Taş soldaki atık alanına geri bırakıldı.')
+    })
+  }
+  window.addEventListener('okey:mobile-return-discard', mobileReturnDiscardListener)
 
   // Yandan alınan taş daha ıstakaya konmadan mouse'a yapışık haldeyken de
   // geldiği sol stack'e tek tıkla doğrudan geri bırakılabilir.

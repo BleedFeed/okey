@@ -145,10 +145,10 @@ const TABLE_LOOK_TARGET = new THREE.Vector3(0, 1.16, 0)
 // bakar. Y hedefi taş merkezinden biraz yukarıda tutulur; böylece iki sıra
 // ıstaka ekranın alt yarısını doldurur ve üst bölüm açma/işleme alanına kalır.
 const MOBILE_RACK_LOOK_TARGETS = {
-  'player-bottom': new THREE.Vector3(0, 2.12, 2.96),
-  'player-top': new THREE.Vector3(0, 2.12, -2.96),
-  'player-left': new THREE.Vector3(-2.96, 2.12, 0),
-  'player-right': new THREE.Vector3(2.96, 2.12, 0),
+  'player-bottom': new THREE.Vector3(0, 1.70, 3.04),
+  'player-top': new THREE.Vector3(0, 1.70, -3.04),
+  'player-left': new THREE.Vector3(-3.04, 1.70, 0),
+  'player-right': new THREE.Vector3(3.04, 1.70, 0),
 }
 
 function getSeatedLookTarget() {

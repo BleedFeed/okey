@@ -31,6 +31,7 @@ import {
   playGameSound,
   playGameSoundCount,
 } from './audio.js'
+import { isTouchLayout } from './mobile.js'
 import {
   attachTableActionsToSeat,
   resetTableVisualState,
@@ -158,6 +159,7 @@ export function resetClientToMatchmaker() {
   state.selectedTileId = null
   state.pendingTablePickup = null
   state.isTableInteracting = false
+  state.stockDrawHighlightTileId = null
 
   resetRackForNewRound()
   resetTableVisualState()
@@ -296,6 +298,17 @@ export function createSocket(playerName) {
     }
 
     state.publicGameState = gameState
+
+    // Mobilde balyadan çekilen taş yalnız oyuncunun o turu boyunca vurgulu
+    // kalır. Discard ile sıra geçtiği anda marker temizlenir.
+    if (
+      state.stockDrawHighlightTileId &&
+      (gameState?.phase !== 'playing' || gameState?.currentSeat !== state.localSeat)
+    ) {
+      state.stockDrawHighlightTileId = null
+      renderOwnHand()
+    }
+
     syncTeaLevelsFromPlayers(gameState?.players || [])
 
     if (enteredRoundEnd && gameState?.roundEndSummary) {
@@ -378,6 +391,18 @@ export function createSocket(playerName) {
       if (addedTile) {
         state.pendingTablePickup = null
         state.isTableInteracting = false
+
+        // Telefonda balyadan çekilen taş parmağa yapışık kalmasın. Yeni taş
+        // mevcut rack solver'ın boş gördüğü slota otomatik yerleşir ve tur
+        // bitene kadar hafif bir çerçeveyle vurgulanır. Desktop davranışı
+        // aynen sticky pickup olarak kalır.
+        if (pendingPickup.source === 'stock' && isTouchLayout()) {
+          state.stockDrawHighlightTileId = addedTile.id
+          syncRackRows()
+          renderOwnHand()
+          setMessage('Yeni taş ıstakaya yerleştirildi. Parlayan taşı istersen sağdaki TAŞ AT alanına sürükleyebilirsin.')
+          return
+        }
 
         beginStickyPickup(addedTile.id, {
           source: pendingPickup.source,
