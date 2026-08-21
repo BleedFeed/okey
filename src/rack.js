@@ -31,6 +31,7 @@ import {
   getJokerDoubleClickDistance,
   getPointerMoveThreshold,
   isMobileDiscardDropPoint,
+  isTouchLayout,
   isTouchPointerEvent,
 } from './mobile.js'
 
@@ -1448,19 +1449,27 @@ function moveStickyPickup(localPoint, options = {}) {
   // Ortadan çekilen taş artık önce ıstakaya bırakılmak zorunda değil.
   // Sticky pickup sağdaki normal discard eşiğine taşınırsa aynı atma
   // kılavuzunu yak ve pointer-up / click ile doğrudan discard'a izin ver.
+  const mobileDiscardTarget = Boolean(
+    isTouchLayout() && options.forceDiscard === true
+  )
   stickyStockDiscardReady = Boolean(
     state.stickyPickupSource === 'stock' &&
-    (localPoint.x >= DISCARD_TRIGGER_X || options.forceDiscard === true)
+    (
+      mobileDiscardTarget ||
+      (!isTouchLayout() && localPoint.x >= DISCARD_TRIGGER_X)
+    )
   )
 
   if (stickyStockDiscardReady) {
-    discardGuideTargetOpacity = 0.72
-    const discardTarget = getCurrentDiscardTarget()
-    discardGuide.position.set(
-      discardTarget.x,
-      -0.007,
-      discardTarget.z
-    )
+    discardGuideTargetOpacity = mobileDiscardTarget ? 0 : 0.72
+    if (!mobileDiscardTarget) {
+      const discardTarget = getCurrentDiscardTarget()
+      discardGuide.position.set(
+        discardTarget.x,
+        -0.007,
+        discardTarget.z
+      )
+    }
   }
   else if (!activeDrag) {
     discardGuideTargetOpacity = 0
@@ -2001,6 +2010,7 @@ function beginActiveDrag(mode, tileIds, anchorTileId) {
     hasMoved: false,
     lastSolution: null,
     discardReady: false,
+    mobileDiscardReady: false,
   }
 
   state.activeRackDragMode = mode
@@ -2049,23 +2059,38 @@ function getClampedDragAnchor(localPoint) {
 function moveActiveDrag(localPoint, options = {}) {
   if (!activeDrag) return
 
+  const mobileDiscardTarget = Boolean(
+    isTouchLayout() && options.forceDiscard === true
+  )
   const canUseDiscardTarget =
     activeDrag.mode === 'single' &&
     activeDrag.items.length === 1 &&
-    (localPoint.x >= DISCARD_TRIGGER_X || options.forceDiscard === true)
+    (
+      mobileDiscardTarget ||
+      (!isTouchLayout() && localPoint.x >= DISCARD_TRIGGER_X)
+    )
 
   activeDrag.discardReady = canUseDiscardTarget
+  activeDrag.mobileDiscardReady = mobileDiscardTarget && canUseDiscardTarget
 
   if (canUseDiscardTarget) {
     clearDropPreview()
-    discardGuideTargetOpacity = 0.72
 
-    const discardTarget = getCurrentDiscardTarget()
-    discardGuide.position.set(
-      discardTarget.x,
-      -0.007,
-      discardTarget.z
-    )
+    // Desktop'ta mevcut fiziksel rack/table discard kılavuzu aynen kalır.
+    // Mobilde ise gerçek hedef ayrı floating DOM panelidir; taşı eski 3D
+    // masadaki discard noktasına zıplatma. Parmağın altındaki taş görünür
+    // kalır, floating panel highlight olur ve pointer-up aynı server discard
+    // event'ini gönderir.
+    discardGuideTargetOpacity = activeDrag.mobileDiscardReady ? 0 : 0.72
+
+    if (!activeDrag.mobileDiscardReady) {
+      const discardTarget = getCurrentDiscardTarget()
+      discardGuide.position.set(
+        discardTarget.x,
+        -0.007,
+        discardTarget.z
+      )
+    }
 
     const item = activeDrag.items[0]
 
@@ -2081,6 +2106,8 @@ function moveActiveDrag(localPoint, options = {}) {
 
     return
   }
+
+  activeDrag.mobileDiscardReady = false
 
   discardGuideTargetOpacity =
     activeDrag.mode === 'single'
@@ -3457,6 +3484,7 @@ export function updateRackInteractionAnimation() {
 
   if (
     activeDrag?.discardReady &&
+    !activeDrag.mobileDiscardReady &&
     activeDrag.mode === 'single' &&
     activeDrag.items.length === 1
   ) {
@@ -3653,7 +3681,7 @@ export function setupRackDragging(
         if (
           state.stickyPickupSource === 'stock' &&
           (
-            localPoint?.x >= DISCARD_TRIGGER_X ||
+            (!isTouchPointerEvent(event) && localPoint?.x >= DISCARD_TRIGGER_X) ||
             isMobileDiscardDropPoint(event.clientX, event.clientY)
           )
         ) {

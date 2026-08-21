@@ -141,11 +141,14 @@ const OVERVIEW_POSITION_DAMPING = 5.5
 const OVERVIEW_ARC_LIFT = 0.34
 
 const TABLE_LOOK_TARGET = new THREE.Vector3(0, 1.16, 0)
+// Telefon landscape'te kamera masa merkezine değil rack'in hemen arkasına
+// bakar. Y hedefi taş merkezinden biraz yukarıda tutulur; böylece iki sıra
+// ıstaka ekranın alt yarısını doldurur ve üst bölüm açma/işleme alanına kalır.
 const MOBILE_RACK_LOOK_TARGETS = {
-  'player-bottom': new THREE.Vector3(0, 1.72, 1.80),
-  'player-top': new THREE.Vector3(0, 1.72, -1.80),
-  'player-left': new THREE.Vector3(-1.80, 1.72, 0),
-  'player-right': new THREE.Vector3(1.80, 1.72, 0),
+  'player-bottom': new THREE.Vector3(0, 2.12, 2.96),
+  'player-top': new THREE.Vector3(0, 2.12, -2.96),
+  'player-left': new THREE.Vector3(-2.96, 2.12, 0),
+  'player-right': new THREE.Vector3(2.96, 2.12, 0),
 }
 
 function getSeatedLookTarget() {
@@ -611,10 +614,10 @@ function syncBoardInspectorMobileChrome(seats) {
 
   const mobileLandscape = window.innerWidth >= window.innerHeight
   boardInspectorPanel.style.top = mobileLandscape
-    ? 'calc(75px + env(safe-area-inset-top, 0px))'
+    ? 'calc(50px + env(safe-area-inset-top, 0px))'
     : 'calc(54px + env(safe-area-inset-top, 0px))'
   boardInspectorPanel.style.height = mobileLandscape
-    ? `${Math.round(THREE.MathUtils.clamp(window.innerHeight * 0.32, 108, 150))}px`
+    ? `${Math.round(THREE.MathUtils.clamp(window.innerHeight * 0.28, 96, 128))}px`
     : `${Math.round(THREE.MathUtils.clamp(window.innerHeight * 0.35, 176, 286))}px`
   boardInspectorPanel.style.minHeight = '0'
   boardInspectorCloseButton.style.width = mobileLandscape ? '32px' : '36px'
@@ -690,7 +693,10 @@ function syncBoardInspectorEntries() {
 
   const count = seats.length
   if (isTouchLayout()) {
-    boardInspectorPanel.style.width = `${Math.max(280, window.innerWidth - 16)}px`
+    const landscape = window.innerWidth >= window.innerHeight
+    boardInspectorPanel.style.width = landscape
+      ? `${Math.round(THREE.MathUtils.clamp(window.innerWidth * 0.46, 300, 520))}px`
+      : `${Math.max(280, window.innerWidth - 16)}px`
   }
   else {
     const viewportLimit = window.innerWidth * BOARD_INSPECTOR_PANEL_VIEWPORT_RATIO

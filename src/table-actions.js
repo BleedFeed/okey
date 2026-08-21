@@ -500,6 +500,7 @@ let stockHoverAmount = 0
 let discardHoverAmount = 0
 let pulseTime = 0
 let mobileTakeDiscardListener = null
+let mobileDrawStockListener = null
 
 function setPointerFromClient(clientX, clientY) {
   const rect = renderer.domElement.getBoundingClientRect()
@@ -844,6 +845,16 @@ function publishMobileDiscardState(gameState, canTakeLatest = false) {
         leftIsActive &&
         gameState?.currentSeat === localSeat &&
         gameState?.discardTopPlayable
+      ),
+      stockCount: Math.max(0, Number(gameState?.stockCount) || 0),
+      canDrawStock: Boolean(
+        localSeat &&
+        gameState?.currentSeat === localSeat &&
+        Math.max(0, Number(gameState?.stockCount) || 0) > 0 &&
+        !state.privateHandState?.mustDiscard &&
+        !state.pendingTablePickup &&
+        !state.isStickyPickup &&
+        !state.isDraggingTile
       ),
     },
   }))
@@ -1496,6 +1507,30 @@ export function setupTableInteractions(
   // kaydımızdan çıkarabilmek için server'ın public discard-taken olayını dinle.
   socket.off('discard-taken', handleDiscardTakenVisualEvent)
   socket.on('discard-taken', handleDiscardTakenVisualEvent)
+
+  // Rack-odaklı mobil kamera masa merkezindeki balyayı göstermediği için
+  // floating BALYA kartı aynı authoritative draw-stock akışını çağırır. Yeni
+  // kural yoktur; sıra / mustDiscard / stock kontrollerini server yine yapar.
+  if (mobileDrawStockListener) {
+    window.removeEventListener('okey:mobile-draw-stock', mobileDrawStockListener)
+  }
+  mobileDrawStockListener = () => {
+    if (state.isDraggingTile || state.pendingTablePickup || state.isStickyPickup) return
+    if (!isMyTurn()) {
+      setMessage('Sıra sende değil.')
+      return
+    }
+    if (Math.max(0, Number(state.publicGameState?.stockCount) || 0) <= 0) {
+      setMessage('Balya boş.')
+      return
+    }
+    if (state.privateHandState?.mustDiscard) {
+      setMessage('Önce elindeki fazla taşı atmalısın.')
+      return
+    }
+    beginPickupRequest({ action: 'draw-stock' }, socket, setMessage)
+  }
+  window.addEventListener('okey:mobile-draw-stock', mobileDrawStockListener)
 
   // Mobilde sol-alt panel fiziksel 3D kuleye küçük bir raycast atmayı
   // gerektirmeden aynı güvenli take-discard akışını çağırır. Server doğrulaması

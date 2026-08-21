@@ -18,6 +18,8 @@ let mobileRoot = null
 let cameraControls = null
 let openingCameraButton = null
 let discardHint = null
+let stockDrawWell = null
+let stockDrawStatus = null
 let incomingDiscardWell = null
 let incomingDiscardTileFace = null
 let incomingDiscardStatus = null
@@ -30,6 +32,8 @@ let mobileDiscardState = {
   ownCount: 0,
   canTake: false,
   blockedPlayable: false,
+  stockCount: 0,
+  canDrawStock: false,
 }
 let lastOrientationKey = ''
 let stylesInstalled = false
@@ -433,15 +437,16 @@ function installStyles() {
        zorunda kalma. Sol-alt panel, soldaki oyuncunun en üst atığını; sağ-alt
        panel ise kendi atık kuleni gösterir. Paneller ekranın merkezindeki
        ıstakayı kapatmayacak kadar dar tutulur. */
+    #okey-mobile-stock-draw,
     #okey-mobile-incoming-discard,
     #okey-mobile-discard-hint {
       position: fixed;
       z-index: 154;
       display: none;
       box-sizing: border-box;
-      width: 74px;
-      height: 74px;
-      padding: 5px;
+      width: 96px;
+      height: 108px;
+      padding: 7px;
       border: 1px solid rgba(236, 215, 150, .24);
       border-radius: 13px;
       background: linear-gradient(180deg, rgba(12, 19, 17, .97), rgba(6, 11, 10, .97));
@@ -452,14 +457,16 @@ function installStyles() {
       touch-action: manipulation;
     }
 
+    .okey-touch-ui #okey-mobile-stock-draw.visible,
     .okey-touch-ui #okey-mobile-incoming-discard.visible,
     .okey-touch-ui #okey-mobile-discard-hint.visible {
       display: grid;
-      grid-template-rows: 13px 1fr 13px;
-      gap: 3px;
+      grid-template-rows: 16px 1fr 17px;
+      gap: 5px;
       align-items: center;
     }
 
+    #okey-mobile-stock-draw .okey-mobile-well-label,
     #okey-mobile-incoming-discard .okey-mobile-well-label,
     #okey-mobile-discard-hint .okey-mobile-well-label {
       overflow: hidden;
@@ -467,15 +474,16 @@ function installStyles() {
       text-align: center;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font: 850 7.5px/1 "Segoe UI", Tahoma, sans-serif;
+      font: 900 9px/1 "Segoe UI", Tahoma, sans-serif;
       letter-spacing: .08em;
     }
 
+    #okey-mobile-stock-draw .okey-mobile-well-status,
     #okey-mobile-incoming-discard .okey-mobile-well-status,
     #okey-mobile-discard-hint .okey-mobile-well-status {
       color: rgba(247,249,248,.56);
       text-align: center;
-      font: 750 7px/1 "Segoe UI", Tahoma, sans-serif;
+      font: 800 8px/1 "Segoe UI", Tahoma, sans-serif;
       letter-spacing: .025em;
       white-space: nowrap;
     }
@@ -483,8 +491,8 @@ function installStyles() {
     .okey-mobile-mini-tile {
       position: relative;
       justify-self: center;
-      width: 28px;
-      height: 40px;
+      width: 40px;
+      height: 56px;
       display: grid;
       place-items: center;
       box-sizing: border-box;
@@ -493,7 +501,7 @@ function installStyles() {
       background: #eee7d8;
       color: #28241f;
       box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.45);
-      font: 900 20px/1 Arial, sans-serif;
+      font: 900 27px/1 Arial, sans-serif;
     }
 
     .okey-mobile-mini-tile.empty {
@@ -507,6 +515,31 @@ function installStyles() {
 
     #okey-mobile-discard-hint {
       pointer-events: none;
+    }
+
+    #okey-mobile-stock-draw .okey-mobile-stock-back {
+      justify-self: center;
+      width: 40px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      box-sizing: border-box;
+      border: 1px solid rgba(195, 178, 128, .30);
+      border-radius: 5px;
+      background:
+        linear-gradient(135deg, rgba(49,88,73,.98), rgba(23,48,40,.98));
+      box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 0 0 2px rgba(236,216,156,.08);
+      color: rgba(244,225,167,.72);
+      font: 900 18px/1 "Segoe UI", sans-serif;
+    }
+
+    #okey-mobile-stock-draw.can-draw {
+      border-color: rgba(111, 220, 151, .58);
+      box-shadow: 0 0 0 1px rgba(69,183,112,.16), 0 8px 24px rgba(0,0,0,.36);
+    }
+
+    #okey-mobile-stock-draw.can-draw .okey-mobile-well-status {
+      color: #8ff0b3;
     }
 
     #okey-mobile-incoming-discard.can-take {
@@ -529,6 +562,23 @@ function installStyles() {
       transform: translateY(-2px) scale(1.035);
     }
 
+    #okey-mobile-stock-draw::before,
+    #okey-mobile-incoming-discard::before,
+    #okey-mobile-discard-hint::before {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.035);
+      pointer-events: none;
+    }
+
+    #okey-mobile-discard-hint {
+      border-style: dashed;
+      border-color: rgba(247, 214, 126, .38);
+    }
+
+    .okey-touch-ui.okey-mobile-keyboard-open #okey-mobile-stock-draw,
     .okey-touch-ui.okey-mobile-keyboard-open #okey-mobile-incoming-discard,
     .okey-touch-ui.okey-mobile-keyboard-open #okey-mobile-discard-hint {
       display: none !important;
@@ -685,11 +735,11 @@ function installStyles() {
       }
 
       .okey-touch-ui #opened-board-inspector-panel {
-        top: calc(75px + var(--okey-safe-top, 0px)) !important;
-        width: min(700px, 78vw) !important;
-        max-width: min(700px, 78vw) !important;
-        height: min(34dvh, 150px) !important;
-        min-height: 108px !important;
+        top: calc(50px + var(--okey-safe-top, 0px)) !important;
+        width: min(520px, 46vw) !important;
+        max-width: min(520px, 46vw) !important;
+        height: min(29dvh, 128px) !important;
+        min-height: 96px !important;
         padding: 4px !important;
         border-radius: 10px !important;
       }
@@ -787,50 +837,57 @@ function installStyles() {
         max-height: calc(var(--okey-visible-height, 100dvh) - 10px) !important;
       }
 
-      /* Alt taraf tamamen ıstaka için ayrılır. Kamera seçimleri üst-ortada
-         küçük bir araç şeridine taşınır; sol/sağ alt köşeler atık panellerine
-         bırakılır. */
+      /* Alt yarı tamamen rack'e bırakılır. Kamera seçimleri üstte küçük bir
+         şerit; yandan alma ve taş atma ise 3D masadan bağımsız, ekranın iki
+         yanında floating action-well olarak durur. Böylece oyuncu fiziksel
+         discard stack'i aramak zorunda kalmaz ve rack'in önü boş kalır. */
       #okey-mobile-gameplay-controls {
         left: 50%;
-        top: calc(43px + var(--okey-safe-top, 0px));
+        top: calc(41px + var(--okey-safe-top, 0px));
         bottom: auto;
         width: auto;
-        grid-template-columns: repeat(3, 42px);
+        grid-template-columns: repeat(3, 44px);
         gap: 3px;
         padding: 3px;
         transform: translateX(-50%);
         border-radius: 9px;
-        opacity: .88;
+        opacity: .86;
       }
 
       #okey-mobile-gameplay-controls button {
-        width: 42px;
-        min-width: 42px;
+        width: 44px;
+        min-width: 44px;
         height: 28px;
         min-height: 28px;
         border-radius: 7px;
         font-size: 7px;
       }
 
+      #okey-mobile-stock-draw,
+      #okey-mobile-incoming-discard,
+      #okey-mobile-discard-hint {
+        top: 31%;
+        bottom: auto;
+        width: clamp(82px, 10.5vw, 96px);
+        height: clamp(88px, 24dvh, 106px);
+        transform: translateY(-50%);
+      }
+
+      #okey-mobile-stock-draw {
+        left: calc(7px + var(--okey-safe-left, 0px));
+      }
+
       #okey-mobile-incoming-discard {
-        left: calc(6px + var(--okey-safe-left, 0px));
-        bottom: calc(5px + var(--okey-safe-bottom, 0px));
-        width: clamp(64px, 9.2vw, 78px);
-        height: clamp(66px, 18dvh, 80px);
+        left: calc(96px + var(--okey-safe-left, 0px));
       }
 
       #okey-mobile-discard-hint {
-        right: calc(6px + var(--okey-safe-right, 0px));
+        right: calc(8px + var(--okey-safe-right, 0px));
         left: auto;
-        top: auto;
-        bottom: calc(5px + var(--okey-safe-bottom, 0px));
-        width: clamp(64px, 9.2vw, 78px);
-        height: clamp(66px, 18dvh, 80px);
-        transform: none;
       }
 
       #okey-mobile-discard-hint.drop-ready {
-        transform: translateY(-2px) scale(1.035);
+        transform: translateY(-50%) scale(1.055);
       }
 
       .okey-touch-ui #round-end-banner,
@@ -928,6 +985,27 @@ function ensureMobileDom() {
   openingCameraButton = makeCameraButton('AÇAN', 'opening')
   cameraControls.append(rackButton, boardButton, openingCameraButton)
 
+  stockDrawWell = document.createElement('button')
+  stockDrawWell.type = 'button'
+  stockDrawWell.id = 'okey-mobile-stock-draw'
+  stockDrawWell.setAttribute('aria-label', 'Balyadan taş çek')
+  stockDrawWell.innerHTML = `
+    <span class="okey-mobile-well-label">BALYA</span>
+    <span class="okey-mobile-stock-back" aria-hidden="true">▦</span>
+    <span class="okey-mobile-well-status">BEKLE</span>
+  `
+  stockDrawStatus = stockDrawWell.querySelector('.okey-mobile-well-status')
+  stockDrawWell.addEventListener('pointerdown', event => {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  })
+  stockDrawWell.addEventListener('click', event => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!canUseMobileStockDraw()) return
+    window.dispatchEvent(new CustomEvent('okey:mobile-draw-stock'))
+  })
+
   incomingDiscardWell = document.createElement('button')
   incomingDiscardWell.type = 'button'
   incomingDiscardWell.id = 'okey-mobile-incoming-discard'
@@ -954,9 +1032,9 @@ function ensureMobileDom() {
   discardHint.id = 'okey-mobile-discard-hint'
   discardHint.setAttribute('aria-label', 'Kendi atık kulen. Taşı buraya sürükleyerek at.')
   discardHint.innerHTML = `
-    <span class="okey-mobile-well-label">ATIK KULEN</span>
+    <span class="okey-mobile-well-label">TAŞ AT</span>
     <span class="okey-mobile-mini-tile empty" aria-hidden="true">—</span>
-    <span class="okey-mobile-well-status">BURAYA AT</span>
+    <span class="okey-mobile-well-status">BURAYA BIRAK</span>
   `
   outgoingDiscardTileFace = discardHint.querySelector('.okey-mobile-mini-tile')
   outgoingDiscardStatus = discardHint.querySelector('.okey-mobile-well-status')
@@ -973,7 +1051,13 @@ function ensureMobileDom() {
     </div>
   `
 
-  document.body.append(cameraControls, incomingDiscardWell, discardHint, orientationHint)
+  document.body.append(
+    cameraControls,
+    stockDrawWell,
+    incomingDiscardWell,
+    discardHint,
+    orientationHint
+  )
   mobileRoot = cameraControls
 }
 
@@ -998,7 +1082,35 @@ function renderMobileMiniTile(element, tile) {
   element.style.color = colorToHex(tile.color)
 }
 
+function canUseMobileStockDraw() {
+  return Boolean(
+    mobileDiscardState.canDrawStock &&
+    !state.privateHandState?.mustDiscard &&
+    !state.pendingTablePickup &&
+    !state.isStickyPickup &&
+    !state.isDraggingTile
+  )
+}
+
 function syncMobileDiscardWells() {
+  const canDrawStockNow = canUseMobileStockDraw()
+
+  if (stockDrawStatus) {
+    const stockCount = Math.max(0, Number(mobileDiscardState.stockCount) || 0)
+    stockDrawStatus.textContent = stockCount <= 0
+      ? 'BALYA BOŞ'
+      : canDrawStockNow
+        ? `${stockCount} TAŞ · ÇEK`
+        : `${stockCount} TAŞ · BEKLE`
+  }
+  stockDrawWell?.classList.toggle('can-draw', canDrawStockNow)
+  if (stockDrawWell) {
+    stockDrawWell.setAttribute(
+      'aria-disabled',
+      canDrawStockNow ? 'false' : 'true'
+    )
+  }
+
   renderMobileMiniTile(incomingDiscardTileFace, mobileDiscardState.leftTile)
   renderMobileMiniTile(outgoingDiscardTileFace, mobileDiscardState.ownTile)
 
@@ -1027,8 +1139,8 @@ function syncMobileDiscardWells() {
   if (outgoingDiscardStatus) {
     const count = Math.max(0, Number(mobileDiscardState.ownCount) || 0)
     outgoingDiscardStatus.textContent = count > 0
-      ? `${count} TAŞ · BURAYA AT`
-      : 'BURAYA AT'
+      ? `${count} TAŞ · BURAYA BIRAK`
+      : 'BURAYA BIRAK'
   }
 }
 
@@ -1177,6 +1289,7 @@ export function updateMobileUi() {
     isPlaying
   )
 
+  stockDrawWell?.classList.toggle('visible', landscapePlaying)
   incomingDiscardWell?.classList.toggle('visible', landscapePlaying)
   discardHint?.classList.toggle('visible', landscapePlaying)
 

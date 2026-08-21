@@ -52,10 +52,11 @@ export const seatCameraSettings = {
   },
 }
 
-// Masaüstü kamera değerleri değişmeden kalır. Mobil landscape görünümü ise
-// masa merkezini seyretmek yerine ıstakayı ana oyun alanı yapar. Kamera fiziksel
-// olarak belirgin biçimde yaklaştırılır; FOV yalnız ıstakanın iki ucunun dar
-// telefonlarda kesilmemesi için aspect oranına göre açılır.
+// Masaüstü kamera değerleri değişmeden kalır. Telefon landscape görünümü
+// ise ayrı bir kompozisyondur: kamera masanın tamamını seyretmez, doğrudan
+// yerel ıstakanın karşısına iner. Bu sayede iki sıra taş ekranın alt yarısında
+// büyük görünür. FOV yalnız dar 16:9 cihazlarda iki rack ucunu koruyacak kadar
+// açılır; geniş telefonlarda gereksiz uzaklaşma yapılmaz.
 function updateResponsiveSeatCameraSettings() {
   let distance = CAMERA_DISTANCE
   let height = CAMERA_HEIGHT
@@ -63,26 +64,33 @@ function updateResponsiveSeatCameraSettings() {
 
   if (isTouchLayout()) {
     const aspect = window.innerWidth / Math.max(window.innerHeight, 1)
+    const landscape = aspect >= 1
 
-    if (aspect >= 2.05) {
-      distance = 4.92
-      height = 2.38
-      fov = 60
-    }
-    else if (aspect >= 1.75) {
-      distance = 4.98
-      height = 2.40
-      fov = 64
-    }
-    else if (aspect >= 1.52) {
-      distance = 5.02
-      height = 2.42
-      fov = 68
-    }
-    else if (aspect >= 1.0) {
-      distance = 5.15
-      height = 2.48
-      fov = 70
+    if (landscape) {
+      // Rack radial merkezi 3.18. 4.90-5.03 aralığı kamerayı rack yüzünden
+      // yaklaşık 1.7-1.9 world-unit uzağa getirir: taşlar büyük kalırken 3.85
+      // world-unit rack genişliği 16:9 telefonda dahi kesilmez.
+      if (aspect >= 2.10) {
+        distance = 4.90
+        fov = 60
+      }
+      else if (aspect >= 1.90) {
+        distance = 4.96
+        fov = 63
+      }
+      else if (aspect >= 1.74) {
+        distance = 5.00
+        fov = 66
+      }
+      else {
+        distance = 5.05
+        fov = 70
+      }
+
+      // Göz hizasına yakın kamera, taş yüzlerini neredeyse karşıdan gösterir.
+      // Look target main.js'te rack'in biraz üstüne kaydırıldığı için rack
+      // ekranın alt yarısında kalır.
+      height = 1.90
     }
     else {
       // Portrait oyun orientation overlay ile kilitlidir. Resize sırasında
